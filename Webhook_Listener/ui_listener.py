@@ -1,27 +1,37 @@
 import streamlit as st
 import requests
 import time
+import json
 
-URL = "https://jsonbin.org/ashiq-unique-123/webhooks"
+TOPIC = "ashiq_webhook_test_2026_xyz"
+# We add /json and ?poll=1 to get the cached history
+URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 
-st.title("🪝 Webhook Inspector (Live)")
+st.title("🪝 Webhook Monitor (ntfy.sh Edition)")
 
 log_placeholder = st.empty()
 
 while True:
     try:
+        # ntfy.sh returns one JSON object per line for history
         r = requests.get(URL, timeout=5)
         if r.status_code == 200:
-            data = r.json()
+            # Split the lines and parse each as JSON
+            messages = [json.loads(line) for line in r.text.strip().split('\n') if line]
+
             with log_placeholder.container():
-                if isinstance(data, list):
-                    for item in reversed(data):
-                        with st.expander(f"New Request Received"):
-                            st.json(item)
-                else:
-                    st.write("Data format is not a list yet.")
+                for msg in reversed(messages):
+                    # The actual webhook data is in the 'message' field
+                    # ntfy.sh stores the data as a string, so we try to parse it back to JSON
+                    try:
+                        clean_data = json.loads(msg.get('message'))
+                        with st.expander(f"Received: {msg.get('time')}"):
+                            st.json(clean_data)
+                    except:
+                        st.write(msg.get('message'))
         else:
-            log_placeholder.info("Waiting for first webhook...")
-    except:
-        pass
+            st.warning("No data found on this topic yet.")
+    except Exception as e:
+        st.error(f"Error: {e}")
+
     time.sleep(5)
