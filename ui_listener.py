@@ -5,10 +5,8 @@ import time
 from datetime import datetime
 import pytz
 
-# --- 1. DYNAMIC CONFIGURATION (Fixed to listen to Jenkins again) ---
-query_params = st.query_params
-# This line ensures it listens to the topic passed by Jenkins
-TOPIC = query_params.get("topic", "wh_receiver_a1b2-c3d4-e5f6-g7h8")
+# --- 1. CONFIGURATION (STRICTLY STATIC) ---
+TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 USER_TZ = 'Asia/Kolkata'
 
@@ -17,12 +15,13 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
+        /* Clear the top RHS wrapper */
         .block-container { padding-top: 5rem !important; max-width: 98% !important; }
 
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
-        /* Sidebar Buttons: Borderless & Transparent */
+        /* Sidebar Buttons: REVERTED TO BORDERLESS */
         .stButton > button { 
             height: 32px !important; 
             margin-bottom: -18px !important; 
@@ -35,15 +34,15 @@ st.markdown("""
             padding-left: 5px !important; 
             box-shadow: none !important;
         }
-        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; border: none !important; }
+        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
 
-        /* Header Layout: No Overlap */
+        /* Label styling */
         .endpoint-label {
             font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
             font-weight: 700;
             color: #10b981;
-            margin-bottom: 5px !important;
+            margin-bottom: 0px !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -58,9 +57,9 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# --- 4. TOP HEADER (Simple & Clean) ---
+# --- 4. TOP HEADER (CLEAN STACK) ---
+# Stacking vertically is the only way to ensure NO overlap and FULL visibility
 st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
-# Showing the dynamic URL so it matches what Jenkins is sending
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 
 st.divider()
