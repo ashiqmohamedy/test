@@ -14,7 +14,7 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# Professional CSS for API Log density and sidebar structure
+# Professional CSS: Native colors, tight spacing, monospace logs
 st.markdown("""
     <style>
         .block-container {
@@ -31,7 +31,7 @@ st.markdown("""
             line-height: 1.1 !important;
         }
 
-        /* Professional Sidebar Button Styling */
+        /* Professional Sidebar Button Styling - Reverted to Native Colors */
         .stButton > button {
             height: 34px !important;
             margin-bottom: -12px !important;
@@ -39,18 +39,12 @@ st.markdown("""
             text-align: left !important;
             font-family: 'Courier New', Courier, monospace !important;
             font-size: 12px !important;
-            border: 1px solid #f0f2f6 !important;
-            background-color: white !important;
         }
 
-        /* Highlight for 'POST' text inside button */
-        .stButton > button:hover {
-            border-color: #ff4b4b !important;
-            color: #ff4b4b !important;
-        }
-
+        /* Ensure Clear/Reset buttons are perfectly aligned */
         [data-testid="stHorizontalBlock"] {
             gap: 0.5rem !important;
+            margin-bottom: -10px !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -78,6 +72,7 @@ try:
     with st.sidebar:
         st.markdown("### 🪝 Webhook Feed")
 
+        # Aligned Controls
         col_clr, col_rst = st.columns(2)
         with col_clr:
             if st.button("🗑️ Clear", use_container_width=True):
@@ -99,11 +94,10 @@ try:
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-                # Check for Auth
+                # Icons for Auth vs Standard
                 has_auth = "🔒" if "Authorization" in msg.get('message', '') else "⚡"
 
-                # Professional Label: METHOD | TIME | ICON
-                # We use fixed-width spacing for a tabular feel
+                # Label: POST | TIME | ICON
                 log_label = f"POST | {ts} | {has_auth}"
 
                 if st.button(log_label, key=m_id, use_container_width=True):
