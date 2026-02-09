@@ -84,7 +84,7 @@ try:
                     lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
                     timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
 
-                    with st.expander(f"📥 Received at {timestamp}{lock_icon}"):
+                    with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
                         c1, c2 = st.columns(2)
                         with c1:
                             st.markdown("**JSON Body**")
