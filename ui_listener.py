@@ -47,27 +47,18 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# 2. Sidebar Brand & Controls
+# 2. Sidebar Brand & Single Reset Control
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    col_clr, col_rst = st.columns(2)
-    with col_clr:
-        if st.button("🗑️ Clear", use_container_width=True):
-            st.session_state.clear_before = time.time()
-            st.session_state.selected_msg = None
-            st.session_state.current_feed = []
-            st.rerun()
-
-    with col_rst:
-        if st.button("🔄 Reset", use_container_width=True):
-            # Total Reset: Clock starts NOW, history is forgotten
-            st.session_state.clear_before = time.time()
-            st.session_state.selected_msg = None
-            st.session_state.viewed_ids = set()
-            st.session_state.current_feed = []
-            st.rerun()
+    # Combined Reset Button (Wipes UI and History)
+    if st.button("🔄 Reset Feed", use_container_width=True):
+        st.session_state.clear_before = time.time()
+        st.session_state.selected_msg = None
+        st.session_state.viewed_ids = set()
+        st.session_state.current_feed = []
+        st.rerun()
 
     st.divider()
     search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
@@ -82,7 +73,7 @@ try:
         for line in raw_lines:
             if not line: continue
             msg = json.loads(line)
-            # Only accept messages that arrived AFTER our last clear/reset timestamp
+            # Threshold Check: Ignore anything prior to the Reset timestamp
             if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
                 new_valid_list.append(msg)
 
@@ -134,6 +125,7 @@ if st.session_state.selected_msg:
         payload = full_content.get('payload', full_content)
         headers = full_content.get('headers', {"Notice": "Standard payload"})
 
+        # Header Row
         c_meta, c_dl = st.columns([3, 1])
         with c_meta:
             st.markdown(f"**Payload ID:** `{sel.get('id')}`")
@@ -141,6 +133,7 @@ if st.session_state.selected_msg:
             st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{sel.get('id')}.json",
                                use_container_width=True)
 
+        # Body Row
         st.markdown("**📦 JSON Body**")
         st.json(payload, expanded=True)
         st.divider()
@@ -149,6 +142,7 @@ if st.session_state.selected_msg:
     except:
         st.error("Error parsing payload.")
 else:
+    # Clear Slate View (No blinking)
     st.info("👈 Select a request from the filtered feed to inspect details.")
 
 # 6. Auto-Refresh Loop
