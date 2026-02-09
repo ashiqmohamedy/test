@@ -26,17 +26,12 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* Increased padding to prevent overlap with Streamlit's top-right buttons */
-        .block-container { 
-            padding-top: 5rem !important; 
-            max-width: 98% !important; 
-        }
+        .block-container { padding-top: 5rem !important; max-width: 98% !important; }
 
-        /* Sidebar Brand Styling - Monospace & Emerald Green */
         .brand-title {
             font-size: 1.6rem !important;
             font-weight: 800 !important;
-            color: #10b981; /* Professional Emerald Green */
+            color: #10b981; 
             font-family: 'Courier New', Courier, monospace !important;
             margin-bottom: 0px !important;
             letter-spacing: -1px;
@@ -59,7 +54,7 @@ st.markdown("""
             border-radius: 0px !important;
             text-align: left !important;
             font-family: 'Courier New', Courier, monospace !important;
-            font-size: 12px !important;
+            font-size: 11px !important; /* Slightly smaller to accommodate IP */
             border: none !important;
             background-color: transparent !important;
             padding-left: 5px !important;
@@ -124,14 +119,27 @@ try:
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-                is_new = m_id not in st.session_state.viewed_ids
-                auth_icon = "🔒" if "Authorization" in msg.get('message', '') else "  "
+                # --- EXTRACT SERVER IP FROM PAYLOAD ---
+                source_ip = "Unknown"
+                try:
+                    inner_data = json.loads(msg.get('message', '{}'))
+                    # Support both raw payload and tunneled format
+                    if "payload" in inner_data:
+                        source_ip = inner_data["payload"].get("sannavServerIp", "Unknown")
+                    else:
+                        source_ip = inner_data.get("sannavServerIp", "Unknown")
+                except:
+                    pass
 
+                is_new = m_id not in st.session_state.viewed_ids
+                auth_icon = "🔒" if "Authorization" in msg.get('message', '') else " "
+
+                # Label includes the IP address for quick identification
                 if is_new:
-                    label_text = f"{ts}: POST"
+                    label_text = f"{ts}: {source_ip}"
                     log_label = f"🔵 {make_bold(label_text)} {auth_icon}"
                 else:
-                    log_label = f"   {ts}: POST {auth_icon}"
+                    log_label = f"   {ts}: {source_ip} {auth_icon}"
 
                 if st.button(log_label, key=m_id, use_container_width=True):
                     st.session_state.selected_msg = msg
@@ -150,7 +158,6 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            # Meta Row - Pushed down by CSS to avoid top-right buttons
             c_meta, c_dl = st.columns([3, 1])
             with c_meta:
                 st.markdown(f"**Payload ID:** `{selected.get('id')}`")
@@ -158,13 +165,11 @@ try:
                 st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
                                    use_container_width=True)
 
-            # JSON Body
             st.markdown("**📦 JSON Body**")
             st.json(payload, expanded=True)
 
             st.divider()
 
-            # Headers Below
             with st.expander("🌐 Full HTTP Headers", expanded=True):
                 st.json(headers)
                 auth_h = headers.get('Authorization', '')
