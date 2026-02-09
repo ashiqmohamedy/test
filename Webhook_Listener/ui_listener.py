@@ -7,24 +7,23 @@ import base64
 # --- CONFIGURATION ---
 TOPIC = "ashiq_webhook_test_2026_xyz"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
-# Set your expected credentials here
-EXPECTED_USER = "admin"
-EXPECTED_PASS = "secret123"
 
-st.set_page_config(page_title="Webhook Auth Validator", layout="wide")
+# --- UI SETUP ---
+# Restoring your original branding
+st.set_page_config(page_title="Webhook Tester", layout="wide")
+st.title("🪝 Webhook Tester")
 
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 
-st.title("🔐 Webhook Authentication Validator")
-
 # --- SIDEBAR ---
 with st.sidebar:
-    st.header("Validation Rules")
-    st.info(f"Expected User: {EXPECTED_USER}\n\nExpected Pass: {EXPECTED_PASS}")
-    if st.button("🗑️ Clear View"):
+    st.header("Controls")
+    if st.button("🗑️ Clear Logs"):
         st.session_state.clear_before = time.time()
         st.rerun()
+    st.write("---")
+    refresh_speed = st.slider("Refresh rate (seconds)", 2, 20, 5)
 
 # --- MAIN LOGIC ---
 try:
@@ -35,7 +34,7 @@ try:
                           m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
 
         if not valid_messages:
-            st.info("Waiting for webhooks...")
+            st.info("Waiting for webhooks... Send a POST request to ntfy.sh/" + TOPIC)
         else:
             for msg in reversed(valid_messages):
                 try:
@@ -43,47 +42,36 @@ try:
                     payload = full_data.get('payload', full_data)
                     headers = full_data.get('headers', {})
 
+                    # Determine Auth Status for the label
                     auth_header = headers.get('Authorization', '')
-
-                    # Logic for Validation
-                    status_text = "🔓 No Auth"
-                    status_color = "secondary"  # Gray
+                    label_suffix = ""
 
                     if auth_header.startswith('Basic '):
-                        try:
-                            encoded = auth_header.split(' ')[1]
-                            decoded = base64.b64decode(encoded).decode('utf-8')
-                            u, p = decoded.split(':')
+                        label_suffix = " (🔒 Auth Found)"
 
-                            if u == EXPECTED_USER and p == EXPECTED_PASS:
-                                status_text = f"✅ Authorized: {u}"
-                                status_color = "success"  # Green
-                            else:
-                                status_text = f"❌ Unauthorized Attempt: {u}"
-                                status_color = "error"  # Red
-                        except:
-                            status_text = "⚠️ Malformed Auth Header"
-                            status_color = "warning"
+                    timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
 
-                    # UI Display
-                    with st.expander(
-                            f"{status_text} | Time: {time.strftime('%H:%M:%S', time.localtime(msg.get('time')))}"):
-                        if status_color == "success":
-                            st.success("Authentication Verified")
-                        elif status_color == "error":
-                            st.error("Authentication Failed: Credentials Mismatch")
-
+                    with st.expander(f"📥 Request at {timestamp}{label_suffix}"):
                         col1, col2 = st.columns(2)
                         with col1:
-                            st.markdown("**Body Payload**")
+                            st.markdown("**Body**")
                             st.json(payload)
                         with col2:
-                            st.markdown("**Decoded Headers**")
+                            st.markdown("**Headers**")
                             st.json(headers)
-                except:
-                    st.write("Non-JSON Data Received:", msg.get('message'))
 
-    time.sleep(5)
+                            # Small decoding section only if Auth is present
+                            if auth_header.startswith('Basic '):
+                                try:
+                                    encoded = auth_header.split(' ')[1]
+                                    decoded = base64.b64decode(encoded).decode('utf-8')
+                                    st.info(f"Decoded Credentials: `{decoded}`")
+                                except:
+                                    pass
+                except:
+                    st.write("Raw Message:", msg.get('message'))
+
+    time.sleep(refresh_speed)
     st.rerun()
 except Exception as e:
-    st.error(f"Error connecting to data source: {e}")
+    st.error(f"Connection Error: {e}")
