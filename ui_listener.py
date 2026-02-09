@@ -14,6 +14,28 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
+# CSS to inject for removing the gap (top padding)
+st.markdown("""
+    <style>
+        /* Remove gap at the top of the main body */
+        .block-container {
+            padding-top: 1rem;
+            padding-bottom: 0rem;
+        }
+        /* Remove gap at the top of the sidebar */
+        [data-testid="stSidebarNav"] {
+            display: none;
+        }
+        [data-testid="stSidebar"] > div:first-child {
+            padding-top: 1rem;
+        }
+        /* Make button tiles look more compact */
+        .stButton button {
+            margin-bottom: -10px;
+        }
+    </style>
+""", unsafe_allow_html=True)
+
 # Initialize session states
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
@@ -31,14 +53,13 @@ try:
     valid_messages = [m for m in messages if
                       m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
 
-    # Sort: Newest at the top
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 
     # --- SIDEBAR: The Tile Feed ---
     with st.sidebar:
-        st.title("🪝 Webhook Feed")
+        # Using markdown with # to get a title closer to the top
+        st.markdown("### 🪝 Webhook Feed")
 
-        # Action buttons
         col_clr, col_rst = st.columns(2)
         if col_clr.button("🗑️ Clear", use_container_width=True):
             st.session_state.clear_before = time.time()
@@ -53,24 +74,19 @@ try:
         if not valid_messages:
             st.info("Awaiting data...")
         else:
-            # Create clickable tiles
             for msg in valid_messages:
                 m_id = msg.get('id', 'N/A')
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
                 has_auth = "🔒" if "Authorization" in msg.get('message', '') else "📥"
-
-                # Create a "Tile" using a button
-                # The label shows the ID and Time
-                tile_label = f"{has_auth} {ts} (ID: {m_id})"
+                tile_label = f"{has_auth} {ts} ({m_id})"
 
                 if st.button(tile_label, key=m_id, use_container_width=True):
                     st.session_state.selected_msg = msg
-                    # No rerun needed, Streamlit handles button clicks as updates
 
     # --- MAIN BODY: detail view ---
-    st.title("🪝 Webhook Tester")  # Reverted title
+    st.title("🪝 Webhook Tester")
 
     selected = st.session_state.selected_msg
 
@@ -85,11 +101,9 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            # Display Area
-            st.markdown(f"### 📦 Payload for ID: `{selected.get('id')}`")
+            st.markdown(f"#### 📦 Payload ID: `{selected.get('id')}`")
             st.json(payload, expanded=True)
 
-            # Controls and Auth
             c1, c2 = st.columns(2)
             with c1:
                 auth_h = headers.get('Authorization', '')
@@ -101,7 +115,7 @@ try:
                         pass
 
             with c2:
-                st.download_button("💾 Download", json.dumps(payload), f"{selected.get('id')}.json")
+                st.download_button("💾 Download", json.dumps(payload, indent=4), f"{selected.get('id')}.json")
 
             with st.status("🌐 Full Headers"):
                 st.json(headers)
@@ -110,12 +124,13 @@ try:
             st.error("Malformed JSON Entry")
             st.code(selected.get('message'))
     else:
-        st.info("👈 Select a webhook tile from the sidebar to view details.")
+        st.info("👈 Select a webhook from the sidebar to view details.")
 
-    # --- REFRESH LOGIC ---
-    # Only pause toggle if you want to add it back, otherwise just auto-refresh
-    time.sleep(5)
+    # --- AUTO-REFRESH ---
+    # We use a short sleep to prevent the CPU from redlining
+    time.sleep(2)
     st.rerun()
 
 except Exception as e:
-    st.error(f"Error: {e}")
+    # Quiet error handling to prevent UI flicker
+    pass
