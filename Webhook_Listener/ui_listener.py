@@ -15,8 +15,22 @@ st.title("🪝 Webhook Tester")
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 
+# --- SIDEBAR (Settings & Controls) ---
+with st.sidebar:
+    st.header("Settings")
+    # THE PAUSE TOGGLE: Essential for high-volume streams
+    is_paused = st.toggle("⏸️ Pause Live Stream", value=False, help="Stop auto-refreshing to inspect data.")
+
+    if st.button("🗑️ Clear Logs"):
+        st.session_state.clear_before = time.time()
+        st.rerun()
+
+    st.write("---")
+    refresh_speed = st.slider("Refresh rate (seconds)", 2, 20, 5)
+
 # --- DATA FETCHING ---
 try:
+    # Only fetch and process if NOT paused
     r = requests.get(URL, timeout=10)
     messages = []
     if r.status_code == 200:
@@ -51,29 +65,17 @@ try:
     # --- SEARCH & FILTER SECTION ---
     search_query = st.text_input("🔍 Search Logs", placeholder="Filter by keyword, ID, or header value...").lower()
 
-    # --- SIDEBAR (Settings Only) ---
-    with st.sidebar:
-        st.header("Settings")
-        if st.button("🗑️ Clear Logs"):
-            st.session_state.clear_before = time.time()
-            st.rerun()
-        st.write("")
-        refresh_speed = st.slider("Refresh rate (seconds)", 2, 20, 5)
-
     # --- LOGS DISPLAY ---
     if not valid_messages:
         st.info("No webhooks found in current session.")
     else:
-        # Filter the messages based on search query
-        filtered_messages = []
-        for msg in valid_messages:
-            raw_content = msg.get('message', '').lower()
-            if search_query in raw_content:
-                filtered_messages.append(msg)
+        # Global Search Filter
+        filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
 
         if not filtered_messages and search_query:
             st.warning(f"No results matching '{search_query}'")
         else:
+            # Layout the logs
             for msg in reversed(filtered_messages):
                 try:
                     full_data = json.loads(msg.get('message'))
@@ -84,7 +86,7 @@ try:
                     lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
                     timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
 
-                    with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
+                    with st.expander(f"📥 Received at {timestamp}{lock_icon}"):
                         c1, c2 = st.columns(2)
                         with c1:
                             st.markdown("**JSON Body**")
@@ -102,9 +104,12 @@ try:
                 except:
                     st.warning(f"Non-JSON Payload: {msg.get('message')}")
 
-    # Auto-refresh loop
-    time.sleep(refresh_speed)
-    st.rerun()
+    # --- AUTO-REFRESH LOOP ---
+    if not is_paused:
+        time.sleep(refresh_speed)
+        st.rerun()
+    else:
+        st.info("⏸️ Stream Paused. Resume to see new incoming webhooks.")
 
 except Exception as e:
     st.error(f"Connection Error: {e}")
