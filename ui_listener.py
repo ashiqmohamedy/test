@@ -14,24 +14,30 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# CSS to inject for removing the gap (top padding)
+# Aggressive CSS to remove all top gaps
 st.markdown("""
     <style>
         /* Remove gap at the top of the main body */
         .block-container {
-            padding-top: 1rem;
-            padding-bottom: 0rem;
+            padding-top: 0rem !important;
+            padding-bottom: 0rem !important;
+            margin-top: -30px !important;
         }
         /* Remove gap at the top of the sidebar */
+        [data-testid="stSidebarUserContent"] {
+            padding-top: 1rem !important;
+        }
+        /* Hide the default sidebar navigation/header space */
         [data-testid="stSidebarNav"] {
             display: none;
         }
-        [data-testid="stSidebar"] > div:first-child {
-            padding-top: 1rem;
+        /* Tighten up the title spacing */
+        h1 {
+            margin-top: -20px !important;
+            padding-top: 0px !important;
         }
-        /* Make button tiles look more compact */
-        .stButton button {
-            margin-bottom: -10px;
+        h3 {
+            margin-top: -10px !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -57,7 +63,6 @@ try:
 
     # --- SIDEBAR: The Tile Feed ---
     with st.sidebar:
-        # Using markdown with # to get a title closer to the top
         st.markdown("### 🪝 Webhook Feed")
 
         col_clr, col_rst = st.columns(2)
@@ -80,7 +85,8 @@ try:
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
                 has_auth = "🔒" if "Authorization" in msg.get('message', '') else "📥"
-                tile_label = f"{has_auth} {ts} ({m_id})"
+                # Simplified Tile Label
+                tile_label = f"{has_auth} Received at {ts}"
 
                 if st.button(tile_label, key=m_id, use_container_width=True):
                     st.session_state.selected_msg = msg
@@ -127,10 +133,8 @@ try:
         st.info("👈 Select a webhook from the sidebar to view details.")
 
     # --- AUTO-REFRESH ---
-    # We use a short sleep to prevent the CPU from redlining
     time.sleep(2)
     st.rerun()
 
 except Exception as e:
-    # Quiet error handling to prevent UI flicker
     pass
