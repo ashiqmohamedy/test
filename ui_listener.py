@@ -9,29 +9,16 @@ import pytz
 # --- CONFIGURATION ---
 TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
-# SET YOUR TIMEZONE HERE (e.g., 'Asia/Kolkata', 'America/New_York', 'Europe/London')
 USER_TZ = 'Asia/Kolkata'
 
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
-st.title("🪝 Webhook Tester")
 
+# Initialize session states
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
-
-# --- SIDEBAR ---
-with st.sidebar:
-    st.header("Settings")
-    is_paused = st.toggle("⏸️ Pause Live Stream", value=False)
-    if st.button("🗑️ Clear Logs"):
-        st.session_state.clear_before = time.time()
-        st.rerun()
-    if st.button("🔄 Hard Reset App"):
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
-        st.rerun()
-    st.write("---")
-    refresh_speed = st.slider("Refresh rate (seconds)", 2, 20, 5)
+if 'selected_msg_id' not in st.session_state:
+    st.session_state.selected_msg_id = None
 
 # --- DATA FETCHING ---
 try:
@@ -41,84 +28,116 @@ try:
         raw_lines = r.text.strip().split('\n')
         messages = [json.loads(line) for line in raw_lines if line]
 
+    # Filter messages
     valid_messages = [m for m in messages if
                       m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
 
-    # --- MAIN BODY HEADER ---
-    col_url, col_meta = st.columns([2, 1])
-    with col_url:
-        st.subheader("Target Endpoint")
-        st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+    # Sort messages (Newest first)
+    valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 
-    with col_meta:
-        st.subheader("Stats")
-        if valid_messages:
-            last_msg_time = valid_messages[-1].get('time')
-            seconds_ago = int(time.time() - last_msg_time)
-            m1, m2 = st.columns(2)
-            m1.metric("Requests", len(valid_messages))
-            m2.metric("Last Ping", f"{seconds_ago}s ago")
+    # --- SIDEBAR: Feed & Controls ---
+    with st.sidebar:
+        st.title("🪝 Webhook Feed")
+
+        # 1. Controls Section
+        with st.expander("⚙️ Settings & Controls"):
+            is_paused = st.toggle("⏸️ Pause Live Stream", value=False)
+            if st.button("🗑️ Clear Logs"):
+                st.session_state.clear_before = time.time()
+                st.session_state.selected_msg_id = None
+                st.rerun()
+            refresh_speed = st.slider("Refresh rate (sec)", 2, 20, 5)
+
+        st.divider()
+
+        # 2. Inbound Feed List
+        if not valid_messages:
+            st.info("Awaiting data...")
+            selected_msg = None
         else:
-            st.metric("Requests", 0)
-
-    st.markdown("---")
-    search_query = st.text_input("🔍 Search Logs", placeholder="Filter by keyword...").lower()
-
-    # --- LOGS DISPLAY ---
-    if not valid_messages:
-        st.info("No webhooks found in current session.")
-    else:
-        filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
-
-        for msg in reversed(filtered_messages[-50:]):
-            try:
-                full_content = json.loads(msg.get('message'))
-
-                if isinstance(full_content, dict) and "headers" in full_content:
-                    payload = full_content.get('payload', {})
-                    headers = full_content.get('headers', {})
-                else:
-                    payload = full_content
-                    headers = {"Notice": "Standard payload"}
-
-                # --- LOCAL TIME CONVERSION ---
+            # Create labels for the radio list
+            options = []
+            msg_map = {}
+            for msg in valid_messages:
+                # Local Time Conversion
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 local_time = utc_time.astimezone(pytz.timezone(USER_TZ))
-                timestamp = local_time.strftime('%H:%M:%S')
+                ts = local_time.strftime('%H:%M:%S')
 
+                # Check for Auth
+                has_auth = "🔒" if "Authorization" in msg.get('message', '') else "📥"
+
+                label = f"{has_auth} Received at {ts}"
+                options.append(label)
+                msg_map[label] = msg
+
+            # The List Selector
+            selection = st.radio(
+                "Select a message to view details:",
+                options,
+                label_visibility="collapsed"
+            )
+            selected_msg = msg_map.get(selection)
+
+    # --- MAIN BODY: Detail View ---
+    st.title("Detail View")
+
+    if selected_msg:
+        try:
+            full_content = json.loads(selected_msg.get('message'))
+
+            # Unwrapping Tunneled format
+            if isinstance(full_content, dict) and "headers" in full_content:
+                payload = full_content.get('payload', {})
+                headers = full_content.get('headers', {})
+            else:
+                payload = full_content
+                headers = {"Notice": "Standard payload"}
+
+            # UI Metrics for current selection
+            m1, m2 = st.columns(2)
+            m1.metric("Total in Feed", len(valid_messages))
+            m2.code(f"ID: {selected_msg.get('id')}")
+
+            st.divider()
+
+            # The JSON Display (Main attraction)
+            st.markdown("### 📦 JSON Body")
+            st.json(payload, expanded=True)
+
+            # Secondary Details
+            col_auth, col_dl = st.columns(2)
+
+            with col_auth:
                 auth_header = headers.get('Authorization', '')
-                lock_icon = " 🔒" if "Basic" in auth_header else ""
+                if "Basic" in auth_header:
+                    try:
+                        encoded = auth_header.replace("Basic ", "")
+                        decoded = base64.b64decode(encoded).decode('utf-8')
+                        st.success(f"**Verified Auth:** `{decoded}`")
+                    except:
+                        pass
 
-                with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
-                    st.markdown("### 📦 JSON Body")
-                    st.json(payload)
+            with col_dl:
+                st.download_button(
+                    label="💾 Download Payload",
+                    data=json.dumps(payload, indent=4),
+                    file_name=f"webhook_{selected_msg.get('id')}.json"
+                )
 
-                    act_col1, act_col2 = st.columns([1, 1])
-                    with act_col1:
-                        st.download_button(label="💾 Download JSON", data=json.dumps(payload, indent=4),
-                                           file_name=f"webhook_{timestamp}.json", key=f"dl_{msg.get('time')}")
+            with st.status("🌐 View Full HTTP Headers"):
+                st.json(headers)
 
-                    with act_col2:
-                        if "Basic" in auth_header:
-                            try:
-                                encoded = auth_header.replace("Basic ", "")
-                                decoded = base64.b64decode(encoded).decode('utf-8')
-                                st.success(f"**Verified Credentials:** `{decoded}`")
-                            except:
-                                pass
+        except Exception:
+            st.error("Could not parse this specific entry.")
+            st.write("Raw data:", selected_msg.get('message'))
+    else:
+        st.info("Select a webhook from the left sidebar to see the data details.")
 
-                    with st.status("🌐 View HTTP Headers", expanded=False):
-                        st.json(headers)
-
-            except Exception:
-                # SILENT FIX: Ignore non-JSON or heartbeat messages
-                pass
-
+    # --- AUTO-REFRESH ---
     if not is_paused:
         time.sleep(refresh_speed)
         st.rerun()
-    else:
-        st.info("⏸️ Stream Paused.")
 
 except Exception as e:
     st.error(f"Connection Error: {e}")
