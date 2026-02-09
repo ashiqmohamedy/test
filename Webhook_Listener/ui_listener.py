@@ -2,73 +2,58 @@ import streamlit as st
 import requests
 import json
 import time
+import base64
 
-# Setup
 TOPIC = "ashiq_webhook_test_2026_xyz"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 
-st.set_page_config(page_title="Webhook Listener", layout="wide")
+st.set_page_config(page_title="Webhook Inspector Pro", layout="wide")
 
-# Initialize a 'clear_time' in the session state if it doesn't exist
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 
-# --- SIDEBAR CONTROLS ---
-with st.sidebar:
-    st.header("Settings")
-
-    # Virtual Clear Button
-    if st.button("🗑️ Clear UI View"):
-        # Set the filter to current time (seconds since epoch)
-        st.session_state.clear_before = time.time()
-        st.success("UI Cleared!")
-        time.sleep(0.5)
-        st.rerun()
-
-    # Reset button to see everything again
-    if st.button("⏪ Restore All History"):
-        st.session_state.clear_before = 0
-        st.rerun()
-
-    st.write("---")
-    refresh_speed = st.slider("Refresh rate (seconds)", 2, 20, 5)
-
-# --- MAIN UI ---
-st.title("🪝 Live Webhook Inspector")
+st.title("🪝 Webhook & Auth Inspector")
 
 try:
     r = requests.get(URL, timeout=10)
-
     if r.status_code == 200:
-        lines = r.text.strip().split('\n')
-        messages = [json.loads(line) for line in lines if line]
-
-        # 1. Filter for actual messages
-        # 2. Filter for messages that arrived AFTER our 'clear' click
-        valid_messages = [
-            m for m in messages
-            if m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before
-        ]
+        messages = [json.loads(line) for line in r.text.strip().split('\n') if line]
+        valid_messages = [m for m in messages if
+                          m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
 
         if not valid_messages:
-            st.info("No new webhooks. Send one to see it here!")
+            st.info("Waiting for webhooks (Authenticated or Basic)...")
         else:
-            st.subheader(f"Showing {len(valid_messages)} New Requests")
             for msg in reversed(valid_messages):
+                # ntfy stores headers in the 'attachment' or we can pass them in the message
+                # For this setup, we assume you send headers as part of your test script
                 try:
-                    payload = json.loads(msg.get('message'))
-                    readable_time = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
-                    with st.expander(f"📥 Received: {readable_time}"):
-                        st.json(payload)
+                    full_data = json.loads(msg.get('message'))
+                    payload = full_data.get('payload', full_data)
+                    headers = full_data.get('headers', {})
+
+                    auth_header = headers.get('Authorization', 'None')
+                    auth_type = "🔓 Unauthenticated"
+
+                    # Decode Basic Auth if present
+                    if auth_header.startswith('Basic '):
+                        encoded_credentials = auth_header.split(' ')[1]
+                        decoded = base64.b64decode(encoded_credentials).decode('utf-8')
+                        auth_type = f"🔐 Basic Auth: {decoded}"
+
+                    with st.expander(
+                            f"{auth_type} | Received: {time.strftime('%H:%M:%S', time.localtime(msg.get('time')))}"):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.write("**Payload**")
+                            st.json(payload)
+                        with col2:
+                            st.write("**Headers**")
+                            st.json(headers)
                 except:
-                    with st.expander(f"📄 Text: {msg.get('time')}"):
-                        st.write(msg.get('message'))
-    else:
-        st.warning("Could not connect to ntfy.sh")
+                    st.write(msg.get('message'))
 
+    time.sleep(5)
+    st.rerun()
 except Exception as e:
-    st.error(f"Connection Error: {e}")
-
-# Auto-refresh logic
-time.sleep(refresh_speed)
-st.rerun()
+    st.error(f"Error: {e}")
