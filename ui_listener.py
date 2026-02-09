@@ -14,10 +14,9 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# Professional CSS: Tightening data density and alignment
+# Professional CSS for API Log density and sidebar structure
 st.markdown("""
     <style>
-        /* Reduce main header size and spacing */
         .block-container {
             padding-top: 3rem !important;
             max-width: 98% !important;
@@ -26,36 +25,30 @@ st.markdown("""
             font-size: 1.5rem !important;
             font-weight: 700 !important;
             margin-bottom: 0.5rem !important;
-            color: #31333F;
         }
-        h3 {
-            font-size: 1.1rem !important;
-            margin-bottom: 0.5rem !important;
-        }
-        h4 {
-            font-size: 1rem !important;
-            margin-top: 0px !important;
-        }
-
-        /* Reduce gap between JSON lines */
+        /* JSON display styling */
         div[data-testid="stJson"] {
             line-height: 1.1 !important;
-            background-color: #f8f9fa;
-            border-radius: 4px;
-            padding: 10px !important;
         }
 
-        /* Tighten sidebar tile spacing */
+        /* Professional Sidebar Button Styling */
         .stButton > button {
-            height: 32px !important;
-            padding-top: 0px !important;
-            padding-bottom: 0px !important;
+            height: 34px !important;
             margin-bottom: -12px !important;
-            font-size: 13px !important;
             border-radius: 4px !important;
+            text-align: left !important;
+            font-family: 'Courier New', Courier, monospace !important;
+            font-size: 12px !important;
+            border: 1px solid #f0f2f6 !important;
+            background-color: white !important;
         }
 
-        /* Align Sidebar Buttons */
+        /* Highlight for 'POST' text inside button */
+        .stButton > button:hover {
+            border-color: #ff4b4b !important;
+            color: #ff4b4b !important;
+        }
+
         [data-testid="stHorizontalBlock"] {
             gap: 0.5rem !important;
         }
@@ -81,11 +74,10 @@ try:
 
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 
-    # --- SIDEBAR: The Tile Feed ---
+    # --- SIDEBAR: The API Log Feed ---
     with st.sidebar:
         st.markdown("### 🪝 Webhook Feed")
 
-        # Aligned Controls
         col_clr, col_rst = st.columns(2)
         with col_clr:
             if st.button("🗑️ Clear", use_container_width=True):
@@ -107,10 +99,14 @@ try:
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-                has_auth = "🔒" if "Authorization" in msg.get('message', '') else "📥"
-                tile_label = f"{has_auth} {ts}"
+                # Check for Auth
+                has_auth = "🔒" if "Authorization" in msg.get('message', '') else "⚡"
 
-                if st.button(tile_label, key=m_id, use_container_width=True):
+                # Professional Label: METHOD | TIME | ICON
+                # We use fixed-width spacing for a tabular feel
+                log_label = f"POST | {ts} | {has_auth}"
+
+                if st.button(log_label, key=m_id, use_container_width=True):
                     st.session_state.selected_msg = msg
 
     # --- MAIN BODY: detail view ---
@@ -130,8 +126,6 @@ try:
                 headers = {"Notice": "Standard payload"}
 
             st.markdown(f"**Payload ID:** `{selected.get('id')}`")
-
-            # The JSON Display
             st.json(payload, expanded=True)
 
             c1, c2 = st.columns([3, 1])
@@ -154,7 +148,7 @@ try:
         except Exception:
             pass
     else:
-        st.info("👈 Select a webhook from the sidebar.")
+        st.info("👈 Select a request from the feed to view details.")
 
     time.sleep(2)
     st.rerun()
