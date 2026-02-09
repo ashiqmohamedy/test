@@ -14,14 +14,14 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# CSS: Borderless sidebar buttons and tight spacing
+# CSS: Borderless sidebar buttons, tight spacing, and monospace alignment
 st.markdown("""
     <style>
         .block-container { padding-top: 3rem !important; max-width: 98% !important; }
         h1 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 0.5rem !important; }
         div[data-testid="stJson"] { line-height: 1.1 !important; }
 
-        /* Borderless Sidebar Buttons */
+        /* Borderless Sidebar Log Styling */
         .stButton > button {
             height: 32px !important;
             margin-bottom: -18px !important;
@@ -29,12 +29,11 @@ st.markdown("""
             text-align: left !important;
             font-family: 'Courier New', Courier, monospace !important;
             font-size: 12px !important;
-            border: none !important; /* Removes the border */
-            background-color: transparent !important; /* Blends with sidebar */
+            border: none !important;
+            background-color: transparent !important;
             padding-left: 5px !important;
         }
 
-        /* Subtle hover effect for borderless buttons */
         .stButton > button:hover {
             background-color: rgba(151, 166, 195, 0.1) !important;
             color: #ff4b4b !important;
@@ -63,6 +62,7 @@ try:
     valid_messages = [m for m in messages if
                       m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
 
+    # Ensure newest is always at the top
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 
     # --- SIDEBAR: The API Log Feed ---
@@ -91,20 +91,17 @@ try:
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-                # --- NEW VS SEEN LOGIC ---
+                # --- LOGIC FOR UNSEEN & AUTH ---
                 is_new = m_id not in st.session_state.viewed_ids
-                status_icon = "🔵" if is_new else "⚡"
+                status_dot = "🔵 " if is_new else "   "  # Spaces keep text aligned
+                auth_icon = "🔒" if "Authorization" in msg.get('message', '') else "  "
 
-                # Use Lock icon if it has Auth, otherwise use our Seen/Unseen icon
-                if "Authorization" in msg.get('message', ''):
-                    status_icon = "🔒" if not is_new else "🔵🔒"
-
-                log_label = f"POST | {ts} | {status_icon}"
+                # New Label Format: [DOT] TIME: METHOD [AUTH]
+                log_label = f"{status_dot}{ts}: POST {auth_icon}"
 
                 if st.button(log_label, key=m_id, use_container_width=True):
                     st.session_state.selected_msg = msg
-                    st.session_state.viewed_ids.add(m_id)  # Mark as seen
-                    # No rerun needed here, button click forces refresh
+                    st.session_state.viewed_ids.add(m_id)
 
     # --- MAIN BODY: detail view ---
     st.title("Webhook Tester")
