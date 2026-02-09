@@ -5,14 +5,13 @@ import time
 import base64
 
 # --- CONFIGURATION ---
-TOPIC = "wh_receiver_8824"  # Professional topic name
+TOPIC = "wh_receiver_8824"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 st.title("🪝 Webhook Tester")
 
-# Initialize session state for clearing logs
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 
@@ -24,12 +23,10 @@ try:
         raw_lines = r.text.strip().split('\n')
         messages = [json.loads(line) for line in raw_lines if line]
 
-    # Filter only messages that arrived AFTER the last "Clear" click
     valid_messages = [m for m in messages if
                       m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
 
     # --- MAIN BODY HEADER ---
-    # Placing the URL and Metrics front and center
     col_url, col_meta = st.columns([2, 1])
 
     with col_url:
@@ -42,7 +39,6 @@ try:
         if valid_messages:
             last_msg_time = valid_messages[-1].get('time')
             seconds_ago = int(time.time() - last_msg_time)
-
             m1, m2 = st.columns(2)
             m1.metric("Requests", len(valid_messages))
             m2.metric("Last Ping", f"{seconds_ago}s ago")
@@ -50,7 +46,10 @@ try:
             st.metric("Requests", 0)
             st.caption("Awaiting first signal...")
 
-    st.markdown("---")  # Horizontal separator
+    st.markdown("---")
+
+    # --- SEARCH & FILTER SECTION ---
+    search_query = st.text_input("🔍 Search Logs", placeholder="Filter by keyword, ID, or header value...").lower()
 
     # --- SIDEBAR (Settings Only) ---
     with st.sidebar:
@@ -65,35 +64,43 @@ try:
     if not valid_messages:
         st.info("No webhooks found in current session.")
     else:
-        for msg in reversed(valid_messages):
-            try:
-                full_data = json.loads(msg.get('message'))
-                # Handle nested payloads or raw data
-                payload = full_data.get('payload', full_data)
-                headers = full_data.get('headers', {})
+        # Filter the messages based on search query
+        filtered_messages = []
+        for msg in valid_messages:
+            raw_content = msg.get('message', '').lower()
+            if search_query in raw_content:
+                filtered_messages.append(msg)
 
-                auth_header = headers.get('Authorization', '')
-                lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
-                timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
+        if not filtered_messages and search_query:
+            st.warning(f"No results matching '{search_query}'")
+        else:
+            for msg in reversed(filtered_messages):
+                try:
+                    full_data = json.loads(msg.get('message'))
+                    payload = full_data.get('payload', full_data)
+                    headers = full_data.get('headers', {})
 
-                with st.expander(f"📥 Received at {timestamp}{lock_icon}"):
-                    c1, c2 = st.columns(2)
-                    with c1:
-                        st.markdown("**JSON Body**")
-                        st.json(payload)
-                    with c2:
-                        st.markdown("**HTTP Headers**")
-                        st.json(headers)
-                        # Automatic Basic Auth Decoding
-                        if auth_header.startswith('Basic '):
-                            try:
-                                encoded = auth_header.split(' ')[1]
-                                decoded = base64.b64decode(encoded).decode('utf-8')
-                                st.success(f"**Verified Auth:** `{decoded}`")
-                            except:
-                                pass
-            except:
-                st.warning(f"Non-JSON Payload: {msg.get('message')}")
+                    auth_header = headers.get('Authorization', '')
+                    lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
+                    timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
+
+                    with st.expander(f"📥 Received at {timestamp}{lock_icon}"):
+                        c1, c2 = st.columns(2)
+                        with c1:
+                            st.markdown("**JSON Body**")
+                            st.json(payload)
+                        with c2:
+                            st.markdown("**HTTP Headers**")
+                            st.json(headers)
+                            if auth_header.startswith('Basic '):
+                                try:
+                                    encoded = auth_header.split(' ')[1]
+                                    decoded = base64.b64decode(encoded).decode('utf-8')
+                                    st.success(f"**Verified Auth:** `{decoded}`")
+                                except:
+                                    pass
+                except:
+                    st.warning(f"Non-JSON Payload: {msg.get('message')}")
 
     # Auto-refresh loop
     time.sleep(refresh_speed)
