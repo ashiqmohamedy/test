@@ -15,11 +15,10 @@ st.title("🪝 Webhook Tester")
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 
-# --- SIDEBAR (Settings & Controls) ---
+# --- SIDEBAR ---
 with st.sidebar:
     st.header("Settings")
-    # THE PAUSE TOGGLE: Essential for high-volume streams
-    is_paused = st.toggle("⏸️ Pause Live Stream", value=False, help="Stop auto-refreshing to inspect data.")
+    is_paused = st.toggle("⏸️ Pause Live Stream", value=False)
 
     if st.button("🗑️ Clear Logs"):
         st.session_state.clear_before = time.time()
@@ -30,7 +29,6 @@ with st.sidebar:
 
 # --- DATA FETCHING ---
 try:
-    # Only fetch and process if NOT paused
     r = requests.get(URL, timeout=10)
     messages = []
     if r.status_code == 200:
@@ -42,11 +40,9 @@ try:
 
     # --- MAIN BODY HEADER ---
     col_url, col_meta = st.columns([2, 1])
-
     with col_url:
         st.subheader("Target Endpoint")
         st.code(f"https://ntfy.sh/{TOPIC}", language="text")
-        st.caption("🚀 Configure your application to send POST requests to this URL.")
 
     with col_meta:
         st.subheader("Stats")
@@ -58,58 +54,53 @@ try:
             m2.metric("Last Ping", f"{seconds_ago}s ago")
         else:
             st.metric("Requests", 0)
-            st.caption("Awaiting first signal...")
 
     st.markdown("---")
-
-    # --- SEARCH & FILTER SECTION ---
-    search_query = st.text_input("🔍 Search Logs", placeholder="Filter by keyword, ID, or header value...").lower()
+    search_query = st.text_input("🔍 Search Logs", placeholder="Filter by keyword...").lower()
 
     # --- LOGS DISPLAY ---
     if not valid_messages:
         st.info("No webhooks found in current session.")
     else:
-        # Global Search Filter
         filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
 
-        if not filtered_messages and search_query:
-            st.warning(f"No results matching '{search_query}'")
-        else:
-            # Layout the logs
-            for msg in reversed(filtered_messages):
-                try:
-                    full_data = json.loads(msg.get('message'))
-                    payload = full_data.get('payload', full_data)
-                    headers = full_data.get('headers', {})
+        for msg in reversed(filtered_messages):
+            try:
+                full_data = json.loads(msg.get('message'))
+                payload = full_data.get('payload', full_data)
+                headers = full_data.get('headers', {})
 
-                    auth_header = headers.get('Authorization', '')
-                    lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
-                    timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
+                auth_header = headers.get('Authorization', '')
+                lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
+                timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
 
-                    with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
-                        c1, c2 = st.columns(2)
-                        with c1:
-                            st.markdown("**JSON Body**")
-                            st.json(payload)
-                        with c2:
-                            st.markdown("**HTTP Headers**")
-                            st.json(headers)
-                            if auth_header.startswith('Basic '):
-                                try:
-                                    encoded = auth_header.split(' ')[1]
-                                    decoded = base64.b64decode(encoded).decode('utf-8')
-                                    st.success(f"**Verified Auth:** `{decoded}`")
-                                except:
-                                    pass
-                except:
-                    st.warning(f"Non-JSON Payload: {msg.get('message')}")
+                with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
+                    # BODY - Now takes full width
+                    st.markdown("### 📦 JSON Body")
+                    st.json(payload)
+
+                    # AUTH DECODER - Prominent placement if found
+                    if auth_header.startswith('Basic '):
+                        try:
+                            encoded = auth_header.split(' ')[1]
+                            decoded = base64.b64decode(encoded).decode('utf-8')
+                            st.success(f"**Verified Credentials:** `{decoded}`")
+                        except:
+                            pass
+
+                    # HEADERS - Collapsible section below the body
+                    with st.status("🌐 View HTTP Headers", expanded=False):
+                        st.json(headers)
+
+            except:
+                st.warning(f"Non-JSON Payload: {msg.get('message')}")
 
     # --- AUTO-REFRESH LOOP ---
     if not is_paused:
         time.sleep(refresh_speed)
         st.rerun()
     else:
-        st.info("⏸️ Stream Paused. Resume to see new incoming webhooks.")
+        st.info("⏸️ Stream Paused.")
 
 except Exception as e:
     st.error(f"Connection Error: {e}")
