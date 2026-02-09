@@ -17,8 +17,8 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 # Initialize session states
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
-if 'selected_msg_id' not in st.session_state:
-    st.session_state.selected_msg_id = None
+if 'selected_msg' not in st.session_state:
+    st.session_state.selected_msg = None
 
 # --- DATA FETCHING ---
 try:
@@ -28,65 +28,56 @@ try:
         raw_lines = r.text.strip().split('\n')
         messages = [json.loads(line) for line in raw_lines if line]
 
-    # Filter messages
     valid_messages = [m for m in messages if
                       m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
 
-    # Sort messages (Newest first)
+    # Sort: Newest at the top
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 
-    # --- SIDEBAR: Feed & Controls ---
+    # --- SIDEBAR: The Tile Feed ---
     with st.sidebar:
         st.title("🪝 Webhook Feed")
 
-        # 1. Controls Section
-        with st.expander("⚙️ Settings & Controls"):
-            is_paused = st.toggle("⏸️ Pause Live Stream", value=False)
-            if st.button("🗑️ Clear Logs"):
-                st.session_state.clear_before = time.time()
-                st.session_state.selected_msg_id = None
-                st.rerun()
-            refresh_speed = st.slider("Refresh rate (sec)", 2, 20, 5)
+        # Action buttons
+        col_clr, col_rst = st.columns(2)
+        if col_clr.button("🗑️ Clear", use_container_width=True):
+            st.session_state.clear_before = time.time()
+            st.session_state.selected_msg = None
+            st.rerun()
+        if col_rst.button("🔄 Reset", use_container_width=True):
+            for key in list(st.session_state.keys()): del st.session_state[key]
+            st.rerun()
 
         st.divider()
 
-        # 2. Inbound Feed List
         if not valid_messages:
             st.info("Awaiting data...")
-            selected_msg = None
         else:
-            # Create labels for the radio list
-            options = []
-            msg_map = {}
+            # Create clickable tiles
             for msg in valid_messages:
-                # Local Time Conversion
+                m_id = msg.get('id', 'N/A')
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
-                local_time = utc_time.astimezone(pytz.timezone(USER_TZ))
-                ts = local_time.strftime('%H:%M:%S')
+                ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-                # Check for Auth
                 has_auth = "🔒" if "Authorization" in msg.get('message', '') else "📥"
 
-                label = f"{has_auth} Received at {ts}"
-                options.append(label)
-                msg_map[label] = msg
+                # Create a "Tile" using a button
+                # The label shows the ID and Time
+                tile_label = f"{has_auth} {ts} (ID: {m_id})"
 
-            # The List Selector
-            selection = st.radio(
-                "Select a message to view details:",
-                options,
-                label_visibility="collapsed"
-            )
-            selected_msg = msg_map.get(selection)
+                if st.button(tile_label, key=m_id, use_container_width=True):
+                    st.session_state.selected_msg = msg
+                    # No rerun needed, Streamlit handles button clicks as updates
 
-    # --- MAIN BODY: Detail View ---
-    st.title("Detail View")
+    # --- MAIN BODY: detail view ---
+    st.title("🪝 Webhook Tester")  # Reverted title
 
-    if selected_msg:
+    selected = st.session_state.selected_msg
+
+    if selected:
         try:
-            full_content = json.loads(selected_msg.get('message'))
+            full_content = json.loads(selected.get('message'))
 
-            # Unwrapping Tunneled format
             if isinstance(full_content, dict) and "headers" in full_content:
                 payload = full_content.get('payload', {})
                 headers = full_content.get('headers', {})
@@ -94,50 +85,37 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            # UI Metrics for current selection
-            m1, m2 = st.columns(2)
-            m1.metric("Total in Feed", len(valid_messages))
-            m2.code(f"ID: {selected_msg.get('id')}")
-
-            st.divider()
-
-            # The JSON Display (Main attraction)
-            st.markdown("### 📦 JSON Body")
+            # Display Area
+            st.markdown(f"### 📦 Payload for ID: `{selected.get('id')}`")
             st.json(payload, expanded=True)
 
-            # Secondary Details
-            col_auth, col_dl = st.columns(2)
-
-            with col_auth:
-                auth_header = headers.get('Authorization', '')
-                if "Basic" in auth_header:
+            # Controls and Auth
+            c1, c2 = st.columns(2)
+            with c1:
+                auth_h = headers.get('Authorization', '')
+                if "Basic" in auth_h:
                     try:
-                        encoded = auth_header.replace("Basic ", "")
-                        decoded = base64.b64decode(encoded).decode('utf-8')
-                        st.success(f"**Verified Auth:** `{decoded}`")
+                        decoded = base64.b64decode(auth_h.replace("Basic ", "")).decode('utf-8')
+                        st.success(f"**Auth:** `{decoded}`")
                     except:
                         pass
 
-            with col_dl:
-                st.download_button(
-                    label="💾 Download Payload",
-                    data=json.dumps(payload, indent=4),
-                    file_name=f"webhook_{selected_msg.get('id')}.json"
-                )
+            with c2:
+                st.download_button("💾 Download", json.dumps(payload), f"{selected.get('id')}.json")
 
-            with st.status("🌐 View Full HTTP Headers"):
+            with st.status("🌐 Full Headers"):
                 st.json(headers)
 
         except Exception:
-            st.error("Could not parse this specific entry.")
-            st.write("Raw data:", selected_msg.get('message'))
+            st.error("Malformed JSON Entry")
+            st.code(selected.get('message'))
     else:
-        st.info("Select a webhook from the left sidebar to see the data details.")
+        st.info("👈 Select a webhook tile from the sidebar to view details.")
 
-    # --- AUTO-REFRESH ---
-    if not is_paused:
-        time.sleep(refresh_speed)
-        st.rerun()
+    # --- REFRESH LOGIC ---
+    # Only pause toggle if you want to add it back, otherwise just auto-refresh
+    time.sleep(5)
+    st.rerun()
 
 except Exception as e:
-    st.error(f"Connection Error: {e}")
+    st.error(f"Error: {e}")
