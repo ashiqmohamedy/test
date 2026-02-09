@@ -44,8 +44,10 @@ if 'selected_msg' not in st.session_state:
     st.session_state.selected_msg = None
 if 'viewed_ids' not in st.session_state:
     st.session_state.viewed_ids = set()
+if 'current_feed' not in st.session_state:
+    st.session_state.current_feed = []
 
-# 2. Sidebar Header & Search (Static)
+# 2. Sidebar Brand & Controls
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
@@ -55,46 +57,54 @@ with st.sidebar:
         if st.button("🗑️ Clear", use_container_width=True):
             st.session_state.clear_before = time.time()
             st.session_state.selected_msg = None
+            st.session_state.current_feed = []  # HARD WIPE
             st.rerun()
 
     with col_rst:
         if st.button("🔄 Reset", use_container_width=True):
-            for key in list(st.session_state.keys()): del st.session_state[key]
+            # Total reset of all logic
+            st.session_state.clear_before = 0
+            st.session_state.selected_msg = None
+            st.session_state.viewed_ids = set()
+            st.session_state.current_feed = []
             st.rerun()
 
     st.divider()
     search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
-
-    # Placeholder for the feed to prevent jumping
     feed_container = st.container()
 
-# 3. Data Fetching
-valid_messages = []
+# 3. Data Fetching (Gated by current session)
 try:
-    r = requests.get(URL, timeout=3)
+    r = requests.get(URL, timeout=2)
     if r.status_code == 200:
+        new_valid_list = []
         raw_lines = r.text.strip().split('\n')
         for line in raw_lines:
             if not line: continue
             msg = json.loads(line)
+            # Only accept messages that arrived AFTER the last Clear/Init
             if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
-                valid_messages.append(msg)
-    valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
+                new_valid_list.append(msg)
+
+        new_valid_list.sort(key=lambda x: x.get('time', 0), reverse=True)
+        st.session_state.current_feed = new_valid_list
 except:
     pass
 
-# 4. Render Sidebar Feed into the static container
+# 4. Render Sidebar Feed
 with feed_container:
-    if not valid_messages:
-        # Instead of a flashy info box, use a quiet message that doesn't push UI elements
+    if not st.session_state.current_feed:
         st.caption("Awaiting new data...")
     else:
-        filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
-        for msg in filtered_messages:
+        # Filter logic
+        display_list = [m for m in st.session_state.current_feed if search_query in m.get('message', '').lower()]
+
+        for msg in display_list:
             m_id = msg.get('id', 'N/A')
             utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
             ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
+            # Extract IP
             source_ip = "Unknown"
             try:
                 inner_data = json.loads(msg.get('message', '{}'))
@@ -119,16 +129,16 @@ with feed_container:
 # 5. Render Main Body
 if st.session_state.selected_msg:
     try:
-        selected = st.session_state.selected_msg
-        full_content = json.loads(selected.get('message'))
+        sel = st.session_state.selected_msg
+        full_content = json.loads(sel.get('message'))
         payload = full_content.get('payload', full_content)
         headers = full_content.get('headers', {"Notice": "Standard payload"})
 
         c_meta, c_dl = st.columns([3, 1])
         with c_meta:
-            st.markdown(f"**Payload ID:** `{selected.get('id')}`")
+            st.markdown(f"**Payload ID:** `{sel.get('id')}`")
         with c_dl:
-            st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
+            st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{sel.get('id')}.json",
                                use_container_width=True)
 
         st.markdown("**📦 JSON Body**")
@@ -137,9 +147,8 @@ if st.session_state.selected_msg:
         with st.expander("🌐 Full HTTP Headers", expanded=True):
             st.json(headers)
     except:
-        pass
+        st.error("Error parsing payload.")
 else:
-    # Use st.empty to prevent the main body from flickering
     st.info("👈 Select a request from the filtered feed to inspect details.")
 
 # 6. Auto-Refresh Loop
