@@ -130,7 +130,7 @@ try:
                         st.json(headers)
 
             except Exception as e:
-                st.warning(f"Raw Entry: {msg.get('message')}")
+                pass
 
     # --- AUTO-REFRESH LOOP ---
     if not is_paused:
