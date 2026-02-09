@@ -14,21 +14,50 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# Balanced CSS: Removes wasted space without hiding titles behind the header
+# Professional CSS: Tightening data density and alignment
 st.markdown("""
     <style>
-        /* Adjust main body to sit just below the header bar */
+        /* Reduce main header size and spacing */
         .block-container {
-            padding-top: 3.5rem !important; 
-            padding-bottom: 0rem !important;
+            padding-top: 3rem !important;
+            max-width: 98% !important;
         }
-        /* Tighten sidebar top spacing */
-        section[data-testid="stSidebar"] div:first-child {
-            padding-top: 0.5rem !important;
-        }
-        /* Ensure titles have clean margins */
         h1 {
-            margin-top: -10px !important;
+            font-size: 1.5rem !important;
+            font-weight: 700 !important;
+            margin-bottom: 0.5rem !important;
+            color: #31333F;
+        }
+        h3 {
+            font-size: 1.1rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        h4 {
+            font-size: 1rem !important;
+            margin-top: 0px !important;
+        }
+
+        /* Reduce gap between JSON lines */
+        div[data-testid="stJson"] {
+            line-height: 1.1 !important;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 10px !important;
+        }
+
+        /* Tighten sidebar tile spacing */
+        .stButton > button {
+            height: 32px !important;
+            padding-top: 0px !important;
+            padding-bottom: 0px !important;
+            margin-bottom: -12px !important;
+            font-size: 13px !important;
+            border-radius: 4px !important;
+        }
+
+        /* Align Sidebar Buttons */
+        [data-testid="stHorizontalBlock"] {
+            gap: 0.5rem !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -56,14 +85,17 @@ try:
     with st.sidebar:
         st.markdown("### 🪝 Webhook Feed")
 
+        # Aligned Controls
         col_clr, col_rst = st.columns(2)
-        if col_clr.button("🗑️ Clear", use_container_width=True):
-            st.session_state.clear_before = time.time()
-            st.session_state.selected_msg = None
-            st.rerun()
-        if col_rst.button("🔄 Reset", use_container_width=True):
-            for key in list(st.session_state.keys()): del st.session_state[key]
-            st.rerun()
+        with col_clr:
+            if st.button("🗑️ Clear", use_container_width=True):
+                st.session_state.clear_before = time.time()
+                st.session_state.selected_msg = None
+                st.rerun()
+        with col_rst:
+            if st.button("🔄 Reset", use_container_width=True):
+                for key in list(st.session_state.keys()): del st.session_state[key]
+                st.rerun()
 
         st.divider()
 
@@ -76,13 +108,13 @@ try:
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
                 has_auth = "🔒" if "Authorization" in msg.get('message', '') else "📥"
-                tile_label = f"{has_auth} Received at {ts}"
+                tile_label = f"{has_auth} {ts}"
 
                 if st.button(tile_label, key=m_id, use_container_width=True):
                     st.session_state.selected_msg = msg
 
     # --- MAIN BODY: detail view ---
-    st.title("🪝 Webhook Tester")
+    st.title("Webhook Tester")
 
     selected = st.session_state.selected_msg
 
@@ -97,10 +129,12 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            st.markdown(f"#### 📦 Payload ID: `{selected.get('id')}`")
+            st.markdown(f"**Payload ID:** `{selected.get('id')}`")
+
+            # The JSON Display
             st.json(payload, expanded=True)
 
-            c1, c2 = st.columns(2)
+            c1, c2 = st.columns([3, 1])
             with c1:
                 auth_h = headers.get('Authorization', '')
                 if "Basic" in auth_h:
@@ -111,20 +145,19 @@ try:
                         pass
 
             with c2:
-                st.download_button("💾 Download", json.dumps(payload, indent=4), f"{selected.get('id')}.json")
+                st.download_button("💾 Download", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
+                                   use_container_width=True)
 
-            with st.status("🌐 Full Headers"):
+            with st.status("🌐 Full Headers", expanded=False):
                 st.json(headers)
 
         except Exception:
-            # Silent fail for heartbeats/malformed data
             pass
     else:
-        st.info("👈 Select a webhook from the sidebar to view details.")
+        st.info("👈 Select a webhook from the sidebar.")
 
-    # --- AUTO-REFRESH ---
     time.sleep(2)
     st.rerun()
 
-except Exception as e:
+except Exception:
     pass
