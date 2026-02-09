@@ -47,102 +47,98 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# 2. Sidebar Brand & Single Reset Control
+# 2. THE EXECUTION GATE: Handle Reset at the very start
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    # Reset Button with immediate state clearing
-    if st.button("🔄 Reset Feed", use_container_width=True):
+    if st.button("🔄 Reset", use_container_width=True):
         st.session_state.clear_before = time.time()
         st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
         st.session_state.current_feed = []
-        st.rerun()
+        st.rerun()  # Immediate exit and restart
 
+# --- BYPASS DATA FETCH IF REFRESHING ---
+# 3. Data Fetching & Strict Filtering
+new_valid_list = []
+try:
+    r = requests.get(URL, timeout=2)
+    if r.status_code == 200:
+        raw_lines = r.text.strip().split('\n')
+        for line in raw_lines:
+            if not line: continue
+            msg = json.loads(line)
+            # Only allow messages newer than the last Reset
+            if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
+                new_valid_list.append(msg)
+
+        new_valid_list.sort(key=lambda x: x.get('time', 0), reverse=True)
+        st.session_state.current_feed = new_valid_list
+except:
+    pass
+
+# 4. Sidebar Content (Search & Feed)
+with st.sidebar:
     st.divider()
     search_query = st.text_input("", placeholder="🔍 Filter feed...", key="search_bar",
                                  label_visibility="collapsed").lower()
-    feed_container = st.container()
 
-# --- BLINK PROTECTION ---
-# If the feed was just reset, we skip fetching/rendering for this cycle
-if st.session_state.current_feed or not st.session_state.selected_msg:
-
-    # 3. Data Fetching & Strict Filtering
-    try:
-        r = requests.get(URL, timeout=2)
-        if r.status_code == 200:
-            new_valid_list = []
-            raw_lines = r.text.strip().split('\n')
-            for line in raw_lines:
-                if not line: continue
-                msg = json.loads(line)
-                if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
-                    new_valid_list.append(msg)
-
-            new_valid_list.sort(key=lambda x: x.get('time', 0), reverse=True)
-            st.session_state.current_feed = new_valid_list
-    except:
-        pass
-
-    # 4. Render Sidebar Feed
-    with feed_container:
-        if not st.session_state.current_feed:
-            st.caption("Awaiting new data...")
-        else:
-            display_list = [m for m in st.session_state.current_feed if search_query in m.get('message', '').lower()]
-
-            for msg in display_list:
-                m_id = msg.get('id', 'N/A')
-                utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
-                ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
-
-                source_ip = "Unknown"
-                try:
-                    inner_data = json.loads(msg.get('message', '{}'))
-                    payload = inner_data.get("payload", inner_data)
-                    source_ip = payload.get("sannavServerIp", "Unknown")
-                except:
-                    pass
-
-                is_new = m_id not in st.session_state.viewed_ids
-                auth_icon = "🔒" if "Authorization" in msg.get('message', '') else " "
-
-                if is_new:
-                    label_text = f"{ts}: {source_ip}"
-                    log_label = f"🔵 {make_bold(label_text)} {auth_icon}"
-                else:
-                    log_label = f"   {ts}: {source_ip} {auth_icon}"
-
-                if st.button(log_label, key=m_id, use_container_width=True):
-                    st.session_state.selected_msg = msg
-                    st.session_state.viewed_ids.add(m_id)
-
-    # 5. Render Main Body
-    if st.session_state.selected_msg:
-        try:
-            sel = st.session_state.selected_msg
-            full_content = json.loads(sel.get('message'))
-            payload = full_content.get('payload', full_content)
-            headers = full_content.get('headers', {"Notice": "Standard payload"})
-
-            c_meta, c_dl = st.columns([3, 1])
-            with c_meta:
-                st.markdown(f"**Payload ID:** `{sel.get('id')}`")
-            with c_dl:
-                st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{sel.get('id')}.json",
-                                   use_container_width=True)
-
-            st.markdown("**📦 JSON Body**")
-            st.json(payload, expanded=True)
-            st.divider()
-            with st.expander("🌐 Full HTTP Headers", expanded=True):
-                st.json(headers)
-        except:
-            st.error("Error parsing payload.")
+    if not st.session_state.current_feed:
+        st.caption("Awaiting new data...")
     else:
-        st.info("👈 Select a request from the filtered feed to inspect details.")
+        display_list = [m for m in st.session_state.current_feed if search_query in m.get('message', '').lower()]
+
+        for msg in display_list:
+            m_id = msg.get('id', 'N/A')
+            utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
+            ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
+
+            source_ip = "Unknown"
+            try:
+                inner_data = json.loads(msg.get('message', '{}'))
+                payload = inner_data.get("payload", inner_data)
+                source_ip = payload.get("sannavServerIp", "Unknown")
+            except:
+                pass
+
+            is_new = m_id not in st.session_state.viewed_ids
+            auth_icon = "🔒" if "Authorization" in msg.get('message', '') else " "
+
+            if is_new:
+                label_text = f"{ts}: {source_ip}"
+                log_label = f"🔵 {make_bold(label_text)} {auth_icon}"
+            else:
+                log_label = f"   {ts}: {source_ip} {auth_icon}"
+
+            if st.button(log_label, key=m_id, use_container_width=True):
+                st.session_state.selected_msg = msg
+                st.session_state.viewed_ids.add(m_id)
+
+# 5. Render Main Body
+if st.session_state.selected_msg:
+    try:
+        sel = st.session_state.selected_msg
+        full_content = json.loads(sel.get('message'))
+        payload = full_content.get('payload', full_content)
+        headers = full_content.get('headers', {"Notice": "Standard payload"})
+
+        c_meta, c_dl = st.columns([3, 1])
+        with c_meta:
+            st.markdown(f"**Payload ID:** `{sel.get('id')}`")
+        with c_dl:
+            st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{sel.get('id')}.json",
+                               use_container_width=True)
+
+        st.markdown("**📦 JSON Body**")
+        st.json(payload, expanded=True)
+        st.divider()
+        with st.expander("🌐 Full HTTP Headers", expanded=True):
+            st.json(headers)
+    except:
+        st.error("Error parsing payload.")
+else:
+    st.info("👈 Select a request from the filtered feed to inspect details.")
 
 # 6. Auto-Refresh Loop
 time.sleep(2)
