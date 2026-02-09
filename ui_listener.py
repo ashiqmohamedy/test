@@ -14,38 +14,33 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# Professional CSS: Native colors, tight spacing, monospace logs
+# CSS: Borderless sidebar buttons and tight spacing
 st.markdown("""
     <style>
-        .block-container {
-            padding-top: 3rem !important;
-            max-width: 98% !important;
-        }
-        h1 {
-            font-size: 1.5rem !important;
-            font-weight: 700 !important;
-            margin-bottom: 0.5rem !important;
-        }
-        /* JSON display styling */
-        div[data-testid="stJson"] {
-            line-height: 1.1 !important;
-        }
+        .block-container { padding-top: 3rem !important; max-width: 98% !important; }
+        h1 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 0.5rem !important; }
+        div[data-testid="stJson"] { line-height: 1.1 !important; }
 
-        /* Professional Sidebar Button Styling - Reverted to Native Colors */
+        /* Borderless Sidebar Buttons */
         .stButton > button {
-            height: 34px !important;
-            margin-bottom: -12px !important;
-            border-radius: 4px !important;
+            height: 32px !important;
+            margin-bottom: -18px !important;
+            border-radius: 0px !important;
             text-align: left !important;
             font-family: 'Courier New', Courier, monospace !important;
             font-size: 12px !important;
+            border: none !important; /* Removes the border */
+            background-color: transparent !important; /* Blends with sidebar */
+            padding-left: 5px !important;
         }
 
-        /* Ensure Clear/Reset buttons are perfectly aligned */
-        [data-testid="stHorizontalBlock"] {
-            gap: 0.5rem !important;
-            margin-bottom: -10px !important;
+        /* Subtle hover effect for borderless buttons */
+        .stButton > button:hover {
+            background-color: rgba(151, 166, 195, 0.1) !important;
+            color: #ff4b4b !important;
         }
+
+        [data-testid="stHorizontalBlock"] { gap: 0.5rem !important; margin-bottom: -10px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -54,6 +49,8 @@ if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 if 'selected_msg' not in st.session_state:
     st.session_state.selected_msg = None
+if 'viewed_ids' not in st.session_state:
+    st.session_state.viewed_ids = set()
 
 # --- DATA FETCHING ---
 try:
@@ -72,12 +69,12 @@ try:
     with st.sidebar:
         st.markdown("### 🪝 Webhook Feed")
 
-        # Aligned Controls
         col_clr, col_rst = st.columns(2)
         with col_clr:
             if st.button("🗑️ Clear", use_container_width=True):
                 st.session_state.clear_before = time.time()
                 st.session_state.selected_msg = None
+                st.session_state.viewed_ids = set()
                 st.rerun()
         with col_rst:
             if st.button("🔄 Reset", use_container_width=True):
@@ -94,14 +91,20 @@ try:
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-                # Icons for Auth vs Standard
-                has_auth = "🔒" if "Authorization" in msg.get('message', '') else "⚡"
+                # --- NEW VS SEEN LOGIC ---
+                is_new = m_id not in st.session_state.viewed_ids
+                status_icon = "🔵" if is_new else "⚡"
 
-                # Label: POST | TIME | ICON
-                log_label = f"POST | {ts} | {has_auth}"
+                # Use Lock icon if it has Auth, otherwise use our Seen/Unseen icon
+                if "Authorization" in msg.get('message', ''):
+                    status_icon = "🔒" if not is_new else "🔵🔒"
+
+                log_label = f"POST | {ts} | {status_icon}"
 
                 if st.button(log_label, key=m_id, use_container_width=True):
                     st.session_state.selected_msg = msg
+                    st.session_state.viewed_ids.add(m_id)  # Mark as seen
+                    # No rerun needed here, button click forces refresh
 
     # --- MAIN BODY: detail view ---
     st.title("Webhook Tester")
