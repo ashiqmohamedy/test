@@ -45,7 +45,7 @@ if 'selected_msg' not in st.session_state:
 if 'viewed_ids' not in st.session_state:
     st.session_state.viewed_ids = set()
 
-# 2. Sidebar Controls (This needs to be processed BEFORE data filtering)
+# 2. Sidebar Header & Search (Static)
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
@@ -55,7 +55,7 @@ with st.sidebar:
         if st.button("🗑️ Clear", use_container_width=True):
             st.session_state.clear_before = time.time()
             st.session_state.selected_msg = None
-            st.rerun()  # Force an immediate restart with the new timestamp
+            st.rerun()
 
     with col_rst:
         if st.button("🔄 Reset", use_container_width=True):
@@ -65,26 +65,29 @@ with st.sidebar:
     st.divider()
     search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
 
-# 3. Data Fetching & Strict Filtering
+    # Placeholder for the feed to prevent jumping
+    feed_container = st.container()
+
+# 3. Data Fetching
 valid_messages = []
 try:
-    r = requests.get(URL, timeout=5)
+    r = requests.get(URL, timeout=3)
     if r.status_code == 200:
         raw_lines = r.text.strip().split('\n')
         for line in raw_lines:
             if not line: continue
             msg = json.loads(line)
-            # Only keep messages that arrived AFTER our clear_before timestamp
             if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
                 valid_messages.append(msg)
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 except:
     pass
 
-# 4. Render Sidebar Feed
-with st.sidebar:
+# 4. Render Sidebar Feed into the static container
+with feed_container:
     if not valid_messages:
-        st.info("Awaiting new data...")
+        # Instead of a flashy info box, use a quiet message that doesn't push UI elements
+        st.caption("Awaiting new data...")
     else:
         filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
         for msg in filtered_messages:
@@ -92,7 +95,6 @@ with st.sidebar:
             utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
             ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-            # Extract IP
             source_ip = "Unknown"
             try:
                 inner_data = json.loads(msg.get('message', '{}'))
@@ -135,8 +137,9 @@ if st.session_state.selected_msg:
         with st.expander("🌐 Full HTTP Headers", expanded=True):
             st.json(headers)
     except:
-        st.error("Error parsing payload.")
+        pass
 else:
+    # Use st.empty to prevent the main body from flickering
     st.info("👈 Select a request from the filtered feed to inspect details.")
 
 # 6. Auto-Refresh Loop
