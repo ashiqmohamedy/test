@@ -7,7 +7,13 @@ from datetime import datetime
 import pytz
 
 # --- CONFIGURATION ---
-TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
+query_params = st.query_params
+
+if "topic" in query_params:
+    TOPIC = query_params["topic"]
+else:
+    TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"  # Your fallback default
+
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 USER_TZ = 'Asia/Kolkata'
 
@@ -47,17 +53,23 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# 2. THE RESET LOGIC (Moved to top to prevent rendering old data)
+# 2. THE RESET LOGIC & ENDPOINT DISPLAY
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
+
+    # NEW: Print the Webhook URL for the user to copy
+    st.markdown("**📡 Webhook Endpoint:**")
+    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+
+    st.markdown("---")
 
     if st.button("🔄 Reset", use_container_width=True):
         st.session_state.clear_before = time.time()
         st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
         st.session_state.current_feed = []
-        st.rerun()  # Forces immediate restart before Section 3-5 can run
+        st.rerun()
 
 # 3. Data Fetching & Strict Filtering
 try:
@@ -140,7 +152,6 @@ if st.session_state.selected_msg:
     except:
         st.error("Error parsing payload.")
 else:
-    # This info box is what the user sees after a Reset (No old data blinking)
     st.info("👈 Select a request from the filtered feed to inspect details.")
 
 # 6. Auto-Refresh Loop
