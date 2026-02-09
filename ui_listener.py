@@ -6,7 +6,6 @@ from datetime import datetime
 import pytz
 
 # --- 1. CONFIGURATION ---
-# Fixed as per your requirement
 TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 USER_TZ = 'Asia/Kolkata'
@@ -16,13 +15,12 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* Pushes content down to clear the top-right Streamlit wrapper */
         .block-container { padding-top: 5.5rem !important; max-width: 98% !important; }
 
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
-        /* Sidebar Buttons: Strictly Borderless & Transparent */
+        /* Sidebar Buttons: Borderless & Transparent */
         .stButton > button { 
             height: 32px !important; 
             margin-bottom: -18px !important; 
@@ -37,20 +35,25 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; border: none !important; }
 
-        /* Header Alignment Logic */
+        /* Fixed Header Alignment */
+        .header-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 10px;
+        }
         .endpoint-label {
             font-family: 'Courier New', Courier, monospace;
             font-size: 13px;
             font-weight: 700;
             color: #10b981;
-            margin: 0px !important;
-            padding-top: 10px;
             white-space: nowrap;
+            margin: 0 !important;
         }
-
-        /* Limits width of URL box */
+        /* Allow URL box to be wide enough to show the full link */
         div[data-testid="stCode"] { 
-            max-width: 450px !important; 
+            min-width: 600px !important; 
+            margin: 0 !important;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -65,14 +68,14 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# --- 4. TOP HEADER ---
-h_col1, h_col2, h_col3 = st.columns([1.5, 3.5, 5])
-
-with h_col1:
-    st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
-
-with h_col2:
-    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+# --- 4. TOP HEADER (Aligned Flexbox) ---
+st.markdown(f"""
+    <div class="header-wrapper">
+        <p class="endpoint-label">📡 ACTIVE ENDPOINT</p>
+    </div>
+""", unsafe_allow_html=True)
+# Placing the code block directly after ensures standard Streamlit behavior with Copy button
+st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 
 st.divider()
 
@@ -92,7 +95,6 @@ with st.sidebar:
     search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
                                  label_visibility="collapsed").lower()
 
-    # Data Fetching
     try:
         r = requests.get(URL, timeout=2)
         if r.status_code == 200:
