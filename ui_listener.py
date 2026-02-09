@@ -7,11 +7,7 @@ import pytz
 
 # --- 1. DYNAMIC CONFIGURATION ---
 query_params = st.query_params
-if "topic" in query_params:
-    TOPIC = query_params["topic"]
-else:
-    TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
-
+TOPIC = query_params.get("topic", "wh_receiver_a1b2-c3d4-e5f6-g7h8")
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 USER_TZ = 'Asia/Kolkata'
 
@@ -20,27 +16,30 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* Minimalist top padding */
-        .block-container { padding-top: 1.5rem !important; max-width: 98% !important; }
+        /* Increased padding-top to 4rem to clear the top-right buttons */
+        .block-container { padding-top: 4rem !important; max-width: 98% !important; }
 
-        /* Label styling to align with the code box */
         .endpoint-label {
             font-family: 'Courier New', Courier, monospace;
             font-size: 13px;
             font-weight: 700;
             color: #10b981;
-            margin-top: 12px;
+            margin-top: 8px;
+            white-space: nowrap;
+        }
+
+        /* This limits the width of the code box so it isn't unnecessarily long */
+        div[data-testid="stCode"] { 
+            max-width: 500px !important; 
+            margin-bottom: -10px !important; 
         }
 
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; }
-
-        /* Reduce gap between code box and divider */
-        div[data-testid="stCode"] { margin-bottom: -10px !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Initialize State
+# 3. State Management
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = time.time()
 if 'selected_msg' not in st.session_state:
@@ -50,20 +49,20 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# --- 4. LEAN TOP SECTION ---
-# Using columns to keep everything on one horizontal line
-head_col1, head_col2 = st.columns([1, 6])
+# --- 4. THE COMPACT HEADER ---
+# Adjusted column ratios: 1.2 for label, 8.8 for the rest to keep it tight
+h_col1, h_col2 = st.columns([1.2, 8.8])
 
-with head_col1:
+with h_col1:
     st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
 
-with head_col2:
-    # Standard code block provides the 'Copy' button natively
+with h_col2:
+    # The CSS max-width above ensures this doesn't stretch across the whole screen
     st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 
 st.divider()
 
-# 5. SIDEBAR: BRAND & RESET
+# 5. SIDEBAR
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
@@ -76,12 +75,10 @@ with st.sidebar:
         st.rerun()
 
     st.divider()
-
-    # 6. Sidebar Feed
     search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
                                  label_visibility="collapsed").lower()
 
-    # Fetch Data
+    # Data Fetching
     try:
         r = requests.get(URL, timeout=2)
         if r.status_code == 200:
@@ -111,26 +108,22 @@ with st.sidebar:
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
 
-# 7. MAIN CONTENT AREA
+# 6. MAIN CONTENT
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     try:
         content = json.loads(sel.get('message'))
         payload = content.get('payload', content)
-
         col1, col2 = st.columns([3, 1])
         col1.markdown(f"**Viewing Request:** `{sel.get('id')}`")
         col2.download_button("💾 Download", json.dumps(payload, indent=4), f"{sel.get('id')}.json",
                              use_container_width=True)
-
         st.json(payload)
-        with st.expander("Full HTTP Headers"):
-            st.json(content.get('headers', {}))
     except:
-        st.error("Could not parse JSON payload.")
+        st.error("Parse Error")
 else:
-    st.info("👈 Select a webhook from the sidebar to inspect it.")
+    st.info("👈 Select a webhook from the sidebar.")
 
-# 8. Loop
+# 7. Loop
 time.sleep(2)
 st.rerun()
