@@ -19,11 +19,9 @@ if 'clear_before' not in st.session_state:
 with st.sidebar:
     st.header("Settings")
     is_paused = st.toggle("⏸️ Pause Live Stream", value=False)
-
     if st.button("🗑️ Clear Logs"):
         st.session_state.clear_before = time.time()
         st.rerun()
-
     st.write("---")
     refresh_speed = st.slider("Refresh rate (seconds)", 2, 20, 5)
 
@@ -66,48 +64,46 @@ try:
 
         for msg in reversed(filtered_messages[-50:]):
             try:
-                full_data = json.loads(msg.get('message'))
-                payload = full_data.get('payload', full_data)
-                headers = full_data.get('headers', {})
+                # The 'message' from ntfy is our JSON string
+                full_content = json.loads(msg.get('message'))
+
+                # Check if the app used the 'tunneling' format (headers inside body)
+                if isinstance(full_content, dict) and "headers" in full_content:
+                    payload = full_content.get('payload', {})
+                    headers = full_content.get('headers', {})
+                else:
+                    payload = full_content
+                    headers = {"Notice": "No tunneled headers found"}
 
                 auth_header = headers.get('Authorization', '')
-                lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
+                lock_icon = " 🔒" if "Basic" in auth_header else ""
                 timestamp_raw = msg.get('time')
                 timestamp = time.strftime('%H:%M:%S', time.localtime(timestamp_raw))
 
                 with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
-                    # BODY
                     st.markdown("### 📦 JSON Body")
                     st.json(payload)
 
-                    # ACTION ROW: Download and Auth
                     act_col1, act_col2 = st.columns([1, 1])
                     with act_col1:
-                        st.download_button(
-                            label="💾 Download JSON",
-                            data=json.dumps(payload, indent=4),
-                            file_name=f"webhook_{timestamp_raw}.json",
-                            mime="application/json",
-                            key=f"dl_{timestamp_raw}"
-                        )
+                        st.download_button(label="💾 Download JSON", data=json.dumps(payload, indent=4),
+                                           file_name=f"webhook_{timestamp_raw}.json", key=f"dl_{timestamp_raw}")
 
                     with act_col2:
-                        if auth_header.startswith('Basic '):
+                        if "Basic" in auth_header:
                             try:
-                                encoded = auth_header.split(' ')[1]
+                                encoded = auth_header.replace("Basic ", "")
                                 decoded = base64.b64decode(encoded).decode('utf-8')
                                 st.success(f"**Verified Credentials:** `{decoded}`")
                             except:
-                                pass
+                                st.error("Could not decode Basic Auth")
 
-                    # HEADERS
                     with st.status("🌐 View HTTP Headers", expanded=False):
                         st.json(headers)
 
             except Exception as e:
-                st.warning(f"Error parsing message: {e}")
+                st.warning(f"Raw Data: {msg.get('message')}")
 
-    # --- AUTO-REFRESH LOOP ---
     if not is_paused:
         time.sleep(refresh_speed)
         st.rerun()
