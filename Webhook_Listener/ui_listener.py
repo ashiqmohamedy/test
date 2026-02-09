@@ -3,13 +3,13 @@ import json
 from datetime import datetime
 
 # Page Configuration
-st.set_page_config(page_title="Python Webhook Tester", layout="wide")
+st.set_page_config(page_title="SANnav Webhook Listener", layout="wide")
 
 # Initialize a list to store incoming requests in the session
 if 'history' not in st.session_state:
     st.session_state.history = []
 
-st.title("🪝 Python Webhook Listener UI")
+st.title("🪝 SANnav Webhook Listener")
 st.write("Send POST requests to this app to see them appear below.")
 
 # Sidebar for controls
