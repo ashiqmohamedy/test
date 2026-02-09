@@ -14,29 +14,20 @@ USER_TZ = 'Asia/Kolkata'
 # --- UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# Aggressive CSS to remove all top gaps
+# Balanced CSS: Removes wasted space without hiding titles behind the header
 st.markdown("""
     <style>
-        /* Remove gap at the top of the main body */
+        /* Adjust main body to sit just below the header bar */
         .block-container {
-            padding-top: 0rem !important;
+            padding-top: 3.5rem !important; 
             padding-bottom: 0rem !important;
-            margin-top: -30px !important;
         }
-        /* Remove gap at the top of the sidebar */
-        [data-testid="stSidebarUserContent"] {
-            padding-top: 1rem !important;
+        /* Tighten sidebar top spacing */
+        section[data-testid="stSidebar"] div:first-child {
+            padding-top: 0.5rem !important;
         }
-        /* Hide the default sidebar navigation/header space */
-        [data-testid="stSidebarNav"] {
-            display: none;
-        }
-        /* Tighten up the title spacing */
+        /* Ensure titles have clean margins */
         h1 {
-            margin-top: -20px !important;
-            padding-top: 0px !important;
-        }
-        h3 {
             margin-top: -10px !important;
         }
     </style>
@@ -85,7 +76,6 @@ try:
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
                 has_auth = "🔒" if "Authorization" in msg.get('message', '') else "📥"
-                # Simplified Tile Label
                 tile_label = f"{has_auth} Received at {ts}"
 
                 if st.button(tile_label, key=m_id, use_container_width=True):
@@ -127,8 +117,8 @@ try:
                 st.json(headers)
 
         except Exception:
-            st.error("Malformed JSON Entry")
-            st.code(selected.get('message'))
+            # Silent fail for heartbeats/malformed data
+            pass
     else:
         st.info("👈 Select a webhook from the sidebar to view details.")
 
