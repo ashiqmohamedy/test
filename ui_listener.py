@@ -28,10 +28,23 @@ st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; max-width: 98% !important; }
 
+        /* Sidebar Brand Styling */
+        .brand-title {
+            font-size: 1.8rem !important;
+            font-weight: 800 !important;
+            color: #ff4b4b;
+            margin-bottom: 0px !important;
+        }
+        .brand-sep {
+            border: 0;
+            height: 3px;
+            background: linear-gradient(to right, #ff4b4b, transparent);
+            margin-bottom: 1rem !important;
+            margin-top: 5px !important;
+        }
+
         /* Sidebar layout tightening */
         [data-testid="stSidebarUserContent"] { padding-top: 1rem !important; }
-
-        /* Search Bar styling to look like a filter */
         div[data-testid="stTextInput"] { margin-top: -15px !important; }
 
         /* JSON display styling */
@@ -82,7 +95,9 @@ try:
 
     # --- SIDEBAR ---
     with st.sidebar:
-        st.subheader("🪝 Webhook Tester")
+        # Branded App Name with Separator
+        st.markdown('<p class="brand-title">🪝 Webhook Tester</p>', unsafe_allow_html=True)
+        st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
         col_clr, col_rst = st.columns(2)
         with col_clr:
@@ -98,13 +113,11 @@ try:
 
         st.divider()
 
-        # Search Filter (placed where the feed title used to be)
         search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
 
         if not valid_messages:
             st.info("Awaiting data...")
         else:
-            # Apply Filter
             filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
 
             for msg in filtered_messages:
@@ -139,7 +152,7 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            # TOP SECTION: ID & Actions
+            # Top Meta Row (ID and Download)
             c_meta, c_dl = st.columns([3, 1])
             with c_meta:
                 st.markdown(f"**Payload ID:** `{selected.get('id')}`")
@@ -147,7 +160,13 @@ try:
                 st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
                                    use_container_width=True)
 
-            # HEADERS SECTION (Now expanded)
+            # 1. JSON Body First
+            st.markdown("**📦 JSON Body**")
+            st.json(payload, expanded=True)
+
+            st.divider()
+
+            # 2. Full Headers Below
             with st.expander("🌐 Full HTTP Headers", expanded=True):
                 st.json(headers)
                 auth_h = headers.get('Authorization', '')
@@ -158,14 +177,9 @@ try:
                     except:
                         pass
 
-            # DATA SECTION
-            st.markdown("**📦 JSON Body**")
-            st.json(payload, expanded=True)
-
         except Exception:
             st.error("Error parsing payload details.")
     else:
-        st.title("Detail View")
         st.info("👈 Select a request from the filtered feed to inspect details.")
 
     time.sleep(2)
