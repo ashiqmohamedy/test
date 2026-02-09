@@ -26,18 +26,25 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        .block-container { padding-top: 2rem !important; max-width: 98% !important; }
+        /* Increased padding to prevent overlap with Streamlit's top-right buttons */
+        .block-container { 
+            padding-top: 5rem !important; 
+            max-width: 98% !important; 
+        }
 
+        /* Sidebar Brand Styling - Monospace & Emerald Green */
         .brand-title {
-            font-size: 1.8rem !important;
+            font-size: 1.6rem !important;
             font-weight: 800 !important;
-            color: #ff4b4b;
+            color: #10b981; /* Professional Emerald Green */
+            font-family: 'Courier New', Courier, monospace !important;
             margin-bottom: 0px !important;
+            letter-spacing: -1px;
         }
         .brand-sep {
             border: 0;
-            height: 3px;
-            background: linear-gradient(to right, #ff4b4b, transparent);
+            height: 2px;
+            background: linear-gradient(to right, #10b981, transparent);
             margin-bottom: 1rem !important;
             margin-top: 5px !important;
         }
@@ -59,8 +66,8 @@ st.markdown("""
         }
 
         .stButton > button:hover {
-            background-color: rgba(151, 166, 195, 0.1) !important;
-            color: #ff4b4b !important;
+            background-color: rgba(16, 185, 129, 0.1) !important;
+            color: #10b981 !important;
         }
 
         [data-testid="stHorizontalBlock"] { gap: 0.5rem !important; margin-bottom: -5px !important; }
@@ -89,7 +96,7 @@ try:
 
     # --- SIDEBAR ---
     with st.sidebar:
-        st.markdown('<p class="brand-title">🪝 Webhook Tester</p>', unsafe_allow_html=True)
+        st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
         st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
         col_clr, col_rst = st.columns(2)
@@ -143,7 +150,7 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            # Meta Row
+            # Meta Row - Pushed down by CSS to avoid top-right buttons
             c_meta, c_dl = st.columns([3, 1])
             with c_meta:
                 st.markdown(f"**Payload ID:** `{selected.get('id')}`")
