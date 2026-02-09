@@ -81,8 +81,12 @@ except:
 # 4. Sidebar Content (Search & Feed)
 with st.sidebar:
     st.divider()
-    search_query = st.text_input("", placeholder="🔍 Filter feed...", key="search_bar",
-                                 label_visibility="collapsed").lower()
+    search_query = st.text_input(
+        label="Search feed",
+        placeholder="🔍 Filter feed...",
+        key="search_bar",
+        label_visibility="collapsed"
+    )
 
     if not st.session_state.current_feed:
         st.caption("Awaiting new data...")
