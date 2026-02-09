@@ -1,63 +1,46 @@
 import streamlit as st
+from fastapi import FastAPI, Request
+import uvicorn
+import threading
 import json
-from datetime import datetime
 
-# Page Configuration
-st.set_page_config(page_title="SANnav Webhook Listener", layout="wide")
+# 1. Setup FastAPI to listen for the "Real" Webhook
+api = FastAPI()
 
-# Initialize a list to store incoming requests in the session
-if 'history' not in st.session_state:
-    st.session_state.history = []
-
-st.title("🪝 SANnav Webhook Listener")
-st.write("Send POST requests to this app to see them appear below.")
-
-# Sidebar for controls
-if st.sidebar.button("Clear History"):
-    st.session_state.history = []
-    st.rerun()
+# This list will hold our data in memory
+if 'webhook_data' not in st.session_state:
+    st.session_state.webhook_data = []
 
 
-# --- THE RECEIVER LOGIC ---
-# In a real Streamlit app, we can use query parameters or
-# a small Flask thread, but for a simple UI test, we simulate
-# the 'Data Viewer' part here.
-
-def add_mock_webhook(payload):
-    new_entry = {
-        "time": datetime.now().strftime("%H:%M:%S"),
-        "body": payload,
-        "headers": {"Content-Type": "application/json", "User-Agent": "Python-Tester"}
-    }
-    st.session_state.history.insert(0, new_entry)
+@api.post("/receiver")
+async def get_webhook(request: Request):
+    payload = await request.json()
+    # In a real cloud app, you'd save this to a file or DB
+    with open("data.json", "a") as f:
+        f.write(json.dumps(payload) + "\n")
+    return {"status": "received"}
 
 
-# --- THE UI DISPLAY ---
-col1, col2 = st.columns([1, 2])
+# 2. Start the API in the background
+def run_api():
+    uvicorn.run(api, host="0.0.0.0", port=8000)
 
-with col1:
-    st.subheader("Incoming Requests")
-    if not st.session_state.history:
-        st.info("No webhooks received yet...")
 
-    for i, entry in enumerate(st.session_state.history):
-        if st.button(f"Request {entry['time']}", key=i):
-            st.session_state.current_view = entry
+if "api_thread" not in st.session_state:
+    thread = threading.Thread(target=run_api, daemon=True)
+    thread.start()
+    st.session_state.api_thread = True
 
-with col2:
-    st.subheader("Inspection Details")
-    if 'current_view' in st.session_state:
-        view = st.session_state.current_view
-        st.write("**Timestamp:**", view['time'])
+# 3. Streamlit UI Logic
+st.title("Live Webhook Listener")
 
-        st.write("**Headers:**")
-        st.json(view['headers'])
+if st.button("Refresh Data"):
+    try:
+        with open("data.json", "r") as f:
+            lines = f.readlines()
+            st.session_state.webhook_data = [json.loads(l) for l in lines]
+    except FileNotFoundError:
+        st.write("No data received yet.")
 
-        st.write("**JSON Payload:**")
-        st.json(view['body'])
-    else:
-        st.write("Select a request from the left to inspect it.")
-
-# Mock button for testing the UI
-if st.sidebar.button("Simulate Incoming Webhook"):
-    add_mock_webhook({"event": "user_signup", "user_id": 123, "status": "active"})
+st.write("### Incoming Payloads:")
+st.json(st.session_state.webhook_data)
