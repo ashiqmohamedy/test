@@ -12,10 +12,8 @@ URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 USER_TZ = 'Asia/Kolkata'
 
 
-# Helper to convert text to Unicode Bold for the button labels
+# Unicode Bold Helper
 def make_bold(text):
-    # Mapping for 0-9 and A-Z/a-z to Unicode Bold
-    # This ensures the "Bold" look even inside a standard button label
     return text.replace("0", "𝟎").replace("1", "𝟏").replace("2", "𝟐").replace("3", "𝟑").replace("4", "𝟒").replace("5",
                                                                                                                   "𝟓").replace(
         "6", "𝟔").replace("7", "𝟕").replace("8", "𝟖").replace("9", "𝟗").replace("P", "𝐏").replace("O", "𝐎").replace("S",
@@ -28,10 +26,18 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        .block-container { padding-top: 3rem !important; max-width: 98% !important; }
-        h1 { font-size: 1.5rem !important; font-weight: 700 !important; margin-bottom: 0.5rem !important; }
+        .block-container { padding-top: 2rem !important; max-width: 98% !important; }
+
+        /* Sidebar layout tightening */
+        [data-testid="stSidebarUserContent"] { padding-top: 1rem !important; }
+
+        /* Search Bar styling to look like a filter */
+        div[data-testid="stTextInput"] { margin-top: -15px !important; }
+
+        /* JSON display styling */
         div[data-testid="stJson"] { line-height: 1.1 !important; }
 
+        /* Borderless Sidebar Log Styling */
         .stButton > button {
             height: 32px !important;
             margin-bottom: -18px !important;
@@ -49,10 +55,11 @@ st.markdown("""
             color: #ff4b4b !important;
         }
 
-        [data-testid="stHorizontalBlock"] { gap: 0.5rem !important; margin-bottom: -10px !important; }
+        [data-testid="stHorizontalBlock"] { gap: 0.5rem !important; margin-bottom: -5px !important; }
     </style>
 """, unsafe_allow_html=True)
 
+# Session State Initialization
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 if 'selected_msg' not in st.session_state:
@@ -73,9 +80,9 @@ try:
 
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 
-    # --- SIDEBAR: The API Log Feed ---
+    # --- SIDEBAR ---
     with st.sidebar:
-        st.markdown("### 🪝 Webhook Feed")
+        st.subheader("🪝 Webhook Tester")
 
         col_clr, col_rst = st.columns(2)
         with col_clr:
@@ -91,10 +98,16 @@ try:
 
         st.divider()
 
+        # Search Filter (placed where the feed title used to be)
+        search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
+
         if not valid_messages:
             st.info("Awaiting data...")
         else:
-            for msg in valid_messages:
+            # Apply Filter
+            filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
+
+            for msg in filtered_messages:
                 m_id = msg.get('id', 'N/A')
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
@@ -102,13 +115,10 @@ try:
                 is_new = m_id not in st.session_state.viewed_ids
                 auth_icon = "🔒" if "Authorization" in msg.get('message', '') else "  "
 
-                # --- BOLDING LOGIC ---
                 if is_new:
-                    # Apply Unicode Bold to the new entries
                     label_text = f"{ts}: POST"
                     log_label = f"🔵 {make_bold(label_text)} {auth_icon}"
                 else:
-                    # Standard monospace for seen entries
                     log_label = f"   {ts}: POST {auth_icon}"
 
                 if st.button(log_label, key=m_id, use_container_width=True):
@@ -116,8 +126,6 @@ try:
                     st.session_state.viewed_ids.add(m_id)
 
     # --- MAIN BODY ---
-    st.title("Webhook Tester")
-
     selected = st.session_state.selected_msg
 
     if selected:
@@ -131,30 +139,34 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            st.markdown(f"**Payload ID:** `{selected.get('id')}`")
-            st.json(payload, expanded=True)
+            # TOP SECTION: ID & Actions
+            c_meta, c_dl = st.columns([3, 1])
+            with c_meta:
+                st.markdown(f"**Payload ID:** `{selected.get('id')}`")
+            with c_dl:
+                st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
+                                   use_container_width=True)
 
-            c1, c2 = st.columns([3, 1])
-            with c1:
+            # HEADERS SECTION (Now expanded)
+            with st.expander("🌐 Full HTTP Headers", expanded=True):
+                st.json(headers)
                 auth_h = headers.get('Authorization', '')
                 if "Basic" in auth_h:
                     try:
                         decoded = base64.b64decode(auth_h.replace("Basic ", "")).decode('utf-8')
-                        st.success(f"**Auth:** `{decoded}`")
+                        st.info(f"**Verified Auth:** `{decoded}`")
                     except:
                         pass
 
-            with c2:
-                st.download_button("💾 Download", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
-                                   use_container_width=True)
-
-            with st.status("🌐 Full Headers", expanded=False):
-                st.json(headers)
+            # DATA SECTION
+            st.markdown("**📦 JSON Body**")
+            st.json(payload, expanded=True)
 
         except Exception:
-            pass
+            st.error("Error parsing payload details.")
     else:
-        st.info("👈 Select a request from the feed to view details.")
+        st.title("Detail View")
+        st.info("👈 Select a request from the filtered feed to inspect details.")
 
     time.sleep(2)
     st.rerun()
