@@ -57,13 +57,13 @@ with st.sidebar:
         if st.button("🗑️ Clear", use_container_width=True):
             st.session_state.clear_before = time.time()
             st.session_state.selected_msg = None
-            st.session_state.current_feed = []  # HARD WIPE
+            st.session_state.current_feed = []
             st.rerun()
 
     with col_rst:
         if st.button("🔄 Reset", use_container_width=True):
-            # Total reset of all logic
-            st.session_state.clear_before = 0
+            # Total Reset: Clock starts NOW, history is forgotten
+            st.session_state.clear_before = time.time()
             st.session_state.selected_msg = None
             st.session_state.viewed_ids = set()
             st.session_state.current_feed = []
@@ -73,7 +73,7 @@ with st.sidebar:
     search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
     feed_container = st.container()
 
-# 3. Data Fetching (Gated by current session)
+# 3. Data Fetching & Strict Filtering
 try:
     r = requests.get(URL, timeout=2)
     if r.status_code == 200:
@@ -82,7 +82,7 @@ try:
         for line in raw_lines:
             if not line: continue
             msg = json.loads(line)
-            # Only accept messages that arrived AFTER the last Clear/Init
+            # Only accept messages that arrived AFTER our last clear/reset timestamp
             if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
                 new_valid_list.append(msg)
 
