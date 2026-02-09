@@ -64,7 +64,7 @@ try:
     else:
         filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
 
-        for msg in reversed(filtered_messages):
+        for msg in reversed(filtered_messages[-50:]):
             try:
                 full_data = json.loads(msg.get('message'))
                 payload = full_data.get('payload', full_data)
