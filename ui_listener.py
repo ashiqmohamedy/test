@@ -37,115 +37,108 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# 1. Initialize State
 if 'clear_before' not in st.session_state:
-    st.session_state.clear_before = time.time()  # Start fresh on first load
+    st.session_state.clear_before = time.time()
 if 'selected_msg' not in st.session_state:
     st.session_state.selected_msg = None
 if 'viewed_ids' not in st.session_state:
     st.session_state.viewed_ids = set()
 
-# --- DATA FETCHING ---
+# 2. Sidebar Controls (This needs to be processed BEFORE data filtering)
+with st.sidebar:
+    st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
+    st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
+
+    col_clr, col_rst = st.columns(2)
+    with col_clr:
+        if st.button("🗑️ Clear", use_container_width=True):
+            st.session_state.clear_before = time.time()
+            st.session_state.selected_msg = None
+            st.rerun()  # Force an immediate restart with the new timestamp
+
+    with col_rst:
+        if st.button("🔄 Reset", use_container_width=True):
+            for key in list(st.session_state.keys()): del st.session_state[key]
+            st.rerun()
+
+    st.divider()
+    search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
+
+# 3. Data Fetching & Strict Filtering
+valid_messages = []
 try:
-    r = requests.get(URL, timeout=10)
-    valid_messages = []
+    r = requests.get(URL, timeout=5)
     if r.status_code == 200:
         raw_lines = r.text.strip().split('\n')
         for line in raw_lines:
             if not line: continue
             msg = json.loads(line)
-
-            # CRITICAL FILTER: Only accept messages sent AFTER the 'Clear' button was last pressed
+            # Only keep messages that arrived AFTER our clear_before timestamp
             if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
                 valid_messages.append(msg)
-
-    # Sort: Newest at the top
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
-
-    # --- SIDEBAR ---
-    with st.sidebar:
-        st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
-        st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
-
-        col_clr, col_rst = st.columns(2)
-        with col_clr:
-            if st.button("🗑️ Clear", use_container_width=True):
-                # Update the timestamp threshold to 'right now'
-                st.session_state.clear_before = time.time()
-                st.session_state.selected_msg = None
-                # We don't clear viewed_ids so we remember old ones if they reappear
-                st.rerun()
-        with col_rst:
-            if st.button("🔄 Reset", use_container_width=True):
-                for key in list(st.session_state.keys()): del st.session_state[key]
-                st.rerun()
-
-        st.divider()
-        search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
-
-        if not valid_messages:
-            st.info("Awaiting new data...")
-        else:
-            filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
-
-            for msg in filtered_messages:
-                m_id = msg.get('id', 'N/A')
-                utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
-                ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
-
-                source_ip = "Unknown"
-                try:
-                    inner_data = json.loads(msg.get('message', '{}'))
-                    if "payload" in inner_data:
-                        source_ip = inner_data["payload"].get("sannavServerIp", "Unknown")
-                    else:
-                        source_ip = inner_data.get("sannavServerIp", "Unknown")
-                except:
-                    pass
-
-                is_new = m_id not in st.session_state.viewed_ids
-                auth_icon = "🔒" if "Authorization" in msg.get('message', '') else " "
-
-                if is_new:
-                    label_text = f"{ts}: {source_ip}"
-                    log_label = f"🔵 {make_bold(label_text)} {auth_icon}"
-                else:
-                    log_label = f"   {ts}: {source_ip} {auth_icon}"
-
-                if st.button(log_label, key=m_id, use_container_width=True):
-                    st.session_state.selected_msg = msg
-                    st.session_state.viewed_ids.add(m_id)
-
-    # --- MAIN BODY ---
-    selected = st.session_state.selected_msg
-    if selected:
-        try:
-            full_content = json.loads(selected.get('message'))
-            if isinstance(full_content, dict) and "headers" in full_content:
-                payload = full_content.get('payload', {})
-                headers = full_content.get('headers', {})
-            else:
-                payload = full_content
-                headers = {"Notice": "Standard payload"}
-
-            c_meta, c_dl = st.columns([3, 1])
-            with c_meta:
-                st.markdown(f"**Payload ID:** `{selected.get('id')}`")
-            with c_dl:
-                st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
-                                   use_container_width=True)
-
-            st.markdown("**📦 JSON Body**")
-            st.json(payload, expanded=True)
-            st.divider()
-            with st.expander("🌐 Full HTTP Headers", expanded=True):
-                st.json(headers)
-        except Exception:
-            st.error("Error parsing payload details.")
-    else:
-        st.info("👈 Select a request from the filtered feed to inspect details.")
-
-    time.sleep(2)
-    st.rerun()
-
-except Exception:
+except:
     pass
+
+# 4. Render Sidebar Feed
+with st.sidebar:
+    if not valid_messages:
+        st.info("Awaiting new data...")
+    else:
+        filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
+        for msg in filtered_messages:
+            m_id = msg.get('id', 'N/A')
+            utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
+            ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
+
+            # Extract IP
+            source_ip = "Unknown"
+            try:
+                inner_data = json.loads(msg.get('message', '{}'))
+                payload = inner_data.get("payload", inner_data)
+                source_ip = payload.get("sannavServerIp", "Unknown")
+            except:
+                pass
+
+            is_new = m_id not in st.session_state.viewed_ids
+            auth_icon = "🔒" if "Authorization" in msg.get('message', '') else " "
+
+            if is_new:
+                label_text = f"{ts}: {source_ip}"
+                log_label = f"🔵 {make_bold(label_text)} {auth_icon}"
+            else:
+                log_label = f"   {ts}: {source_ip} {auth_icon}"
+
+            if st.button(log_label, key=m_id, use_container_width=True):
+                st.session_state.selected_msg = msg
+                st.session_state.viewed_ids.add(m_id)
+
+# 5. Render Main Body
+if st.session_state.selected_msg:
+    try:
+        selected = st.session_state.selected_msg
+        full_content = json.loads(selected.get('message'))
+        payload = full_content.get('payload', full_content)
+        headers = full_content.get('headers', {"Notice": "Standard payload"})
+
+        c_meta, c_dl = st.columns([3, 1])
+        with c_meta:
+            st.markdown(f"**Payload ID:** `{selected.get('id')}`")
+        with c_dl:
+            st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
+                               use_container_width=True)
+
+        st.markdown("**📦 JSON Body**")
+        st.json(payload, expanded=True)
+        st.divider()
+        with st.expander("🌐 Full HTTP Headers", expanded=True):
+            st.json(headers)
+    except:
+        st.error("Error parsing payload.")
+else:
+    st.info("👈 Select a request from the filtered feed to inspect details.")
+
+# 6. Auto-Refresh Loop
+time.sleep(2)
+st.rerun()
