@@ -72,28 +72,40 @@ try:
 
                 auth_header = headers.get('Authorization', '')
                 lock_icon = " 🔒" if auth_header.startswith('Basic ') else ""
-                timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
+                timestamp_raw = msg.get('time')
+                timestamp = time.strftime('%H:%M:%S', time.localtime(timestamp_raw))
 
                 with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
-                    # BODY - Now takes full width
+                    # BODY
                     st.markdown("### 📦 JSON Body")
                     st.json(payload)
 
-                    # AUTH DECODER - Prominent placement if found
-                    if auth_header.startswith('Basic '):
-                        try:
-                            encoded = auth_header.split(' ')[1]
-                            decoded = base64.b64decode(encoded).decode('utf-8')
-                            st.success(f"**Verified Credentials:** `{decoded}`")
-                        except:
-                            pass
+                    # ACTION ROW: Download and Auth
+                    act_col1, act_col2 = st.columns([1, 1])
+                    with act_col1:
+                        st.download_button(
+                            label="💾 Download JSON",
+                            data=json.dumps(payload, indent=4),
+                            file_name=f"webhook_{timestamp_raw}.json",
+                            mime="application/json",
+                            key=f"dl_{timestamp_raw}"
+                        )
 
-                    # HEADERS - Collapsible section below the body
+                    with act_col2:
+                        if auth_header.startswith('Basic '):
+                            try:
+                                encoded = auth_header.split(' ')[1]
+                                decoded = base64.b64decode(encoded).decode('utf-8')
+                                st.success(f"**Verified Credentials:** `{decoded}`")
+                            except:
+                                pass
+
+                    # HEADERS
                     with st.status("🌐 View HTTP Headers", expanded=False):
                         st.json(headers)
 
-            except:
-                st.warning(f"Non-JSON Payload: {msg.get('message')}")
+            except Exception as e:
+                st.warning(f"Error parsing message: {e}")
 
     # --- AUTO-REFRESH LOOP ---
     if not is_paused:
