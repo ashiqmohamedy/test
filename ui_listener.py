@@ -18,27 +18,25 @@ USER_TZ = 'Asia/Kolkata'
 # --- 2. UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# Custom CSS for the Top Header Card
 st.markdown("""
     <style>
-        .block-container { padding-top: 2rem !important; max-width: 98% !important; }
-        .header-card {
-            background-color: rgba(16, 185, 129, 0.05);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            padding: 1.5rem;
-            border-radius: 10px;
-            margin-bottom: 2rem;
-            margin-top: 1rem;
-        }
+        /* Minimalist top padding */
+        .block-container { padding-top: 1.5rem !important; max-width: 98% !important; }
+
+        /* Label styling to align with the code box */
         .endpoint-label {
-            color: #10b981;
-            font-size: 0.8rem;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 13px;
             font-weight: 700;
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
+            color: #10b981;
+            margin-top: 12px;
         }
+
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; }
+
+        /* Reduce gap between code box and divider */
+        div[data-testid="stCode"] { margin-bottom: -10px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -52,17 +50,15 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# --- 4. TOP BODY SECTION (The "Header Card") ---
-# This sits at the top of the main section, safe from the RHS wrapper
-header_container = st.container()
-with header_container:
-    st.markdown(f"""
-        <div class="header-card">
-            <div class="endpoint-label">📡 Active Webhook Endpoint</div>
-            <p style="font-size: 0.9rem; color: #666;">Point your external system to the URL below to capture live data for this session.</p>
-        </div>
-    """, unsafe_allow_html=True)
-    # We use st.code here so the "Copy" button is still available
+# --- 4. LEAN TOP SECTION ---
+# Using columns to keep everything on one horizontal line
+head_col1, head_col2 = st.columns([1, 6])
+
+with head_col1:
+    st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
+
+with head_col2:
+    # Standard code block provides the 'Copy' button natively
     st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 
 st.divider()
