@@ -12,7 +12,6 @@ URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 USER_TZ = 'Asia/Kolkata'
 
 
-# Unicode Bold Helper
 def make_bold(text):
     return text.replace("0", "𝟎").replace("1", "𝟏").replace("2", "𝟐").replace("3", "𝟑").replace("4", "𝟒").replace("5",
                                                                                                                   "𝟓").replace(
@@ -27,50 +26,19 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 st.markdown("""
     <style>
         .block-container { padding-top: 5rem !important; max-width: 98% !important; }
-
-        .brand-title {
-            font-size: 1.6rem !important;
-            font-weight: 800 !important;
-            color: #10b981; 
-            font-family: 'Courier New', Courier, monospace !important;
-            margin-bottom: 0px !important;
-            letter-spacing: -1px;
-        }
-        .brand-sep {
-            border: 0;
-            height: 2px;
-            background: linear-gradient(to right, #10b981, transparent);
-            margin-bottom: 1rem !important;
-            margin-top: 5px !important;
-        }
-
+        .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
+        .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
         [data-testid="stSidebarUserContent"] { padding-top: 1rem !important; }
         div[data-testid="stTextInput"] { margin-top: -15px !important; }
         div[data-testid="stJson"] { line-height: 1.1 !important; }
-
-        .stButton > button {
-            height: 32px !important;
-            margin-bottom: -18px !important;
-            border-radius: 0px !important;
-            text-align: left !important;
-            font-family: 'Courier New', Courier, monospace !important;
-            font-size: 11px !important; /* Slightly smaller to accommodate IP */
-            border: none !important;
-            background-color: transparent !important;
-            padding-left: 5px !important;
-        }
-
-        .stButton > button:hover {
-            background-color: rgba(16, 185, 129, 0.1) !important;
-            color: #10b981 !important;
-        }
-
+        .stButton > button { height: 32px !important; margin-bottom: -18px !important; border-radius: 0px !important; text-align: left !important; font-family: 'Courier New', Courier, monospace !important; font-size: 11px !important; border: none !important; background-color: transparent !important; padding-left: 5px !important; }
+        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
         [data-testid="stHorizontalBlock"] { gap: 0.5rem !important; margin-bottom: -5px !important; }
     </style>
 """, unsafe_allow_html=True)
 
 if 'clear_before' not in st.session_state:
-    st.session_state.clear_before = 0
+    st.session_state.clear_before = time.time()  # Start fresh on first load
 if 'selected_msg' not in st.session_state:
     st.session_state.selected_msg = None
 if 'viewed_ids' not in st.session_state:
@@ -79,14 +47,18 @@ if 'viewed_ids' not in st.session_state:
 # --- DATA FETCHING ---
 try:
     r = requests.get(URL, timeout=10)
-    messages = []
+    valid_messages = []
     if r.status_code == 200:
         raw_lines = r.text.strip().split('\n')
-        messages = [json.loads(line) for line in raw_lines if line]
+        for line in raw_lines:
+            if not line: continue
+            msg = json.loads(line)
 
-    valid_messages = [m for m in messages if
-                      m.get('event') == 'message' and m.get('time', 0) > st.session_state.clear_before]
+            # CRITICAL FILTER: Only accept messages sent AFTER the 'Clear' button was last pressed
+            if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
+                valid_messages.append(msg)
 
+    # Sort: Newest at the top
     valid_messages.sort(key=lambda x: x.get('time', 0), reverse=True)
 
     # --- SIDEBAR ---
@@ -97,9 +69,10 @@ try:
         col_clr, col_rst = st.columns(2)
         with col_clr:
             if st.button("🗑️ Clear", use_container_width=True):
+                # Update the timestamp threshold to 'right now'
                 st.session_state.clear_before = time.time()
                 st.session_state.selected_msg = None
-                st.session_state.viewed_ids = set()
+                # We don't clear viewed_ids so we remember old ones if they reappear
                 st.rerun()
         with col_rst:
             if st.button("🔄 Reset", use_container_width=True):
@@ -110,7 +83,7 @@ try:
         search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
 
         if not valid_messages:
-            st.info("Awaiting data...")
+            st.info("Awaiting new data...")
         else:
             filtered_messages = [m for m in valid_messages if search_query in m.get('message', '').lower()]
 
@@ -119,11 +92,9 @@ try:
                 utc_time = datetime.fromtimestamp(msg.get('time'), pytz.utc)
                 ts = utc_time.astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
 
-                # --- EXTRACT SERVER IP FROM PAYLOAD ---
                 source_ip = "Unknown"
                 try:
                     inner_data = json.loads(msg.get('message', '{}'))
-                    # Support both raw payload and tunneled format
                     if "payload" in inner_data:
                         source_ip = inner_data["payload"].get("sannavServerIp", "Unknown")
                     else:
@@ -134,7 +105,6 @@ try:
                 is_new = m_id not in st.session_state.viewed_ids
                 auth_icon = "🔒" if "Authorization" in msg.get('message', '') else " "
 
-                # Label includes the IP address for quick identification
                 if is_new:
                     label_text = f"{ts}: {source_ip}"
                     log_label = f"🔵 {make_bold(label_text)} {auth_icon}"
@@ -147,7 +117,6 @@ try:
 
     # --- MAIN BODY ---
     selected = st.session_state.selected_msg
-
     if selected:
         try:
             full_content = json.loads(selected.get('message'))
@@ -167,19 +136,9 @@ try:
 
             st.markdown("**📦 JSON Body**")
             st.json(payload, expanded=True)
-
             st.divider()
-
             with st.expander("🌐 Full HTTP Headers", expanded=True):
                 st.json(headers)
-                auth_h = headers.get('Authorization', '')
-                if "Basic" in auth_h:
-                    try:
-                        decoded = base64.b64decode(auth_h.replace("Basic ", "")).decode('utf-8')
-                        st.info(f"**Verified Auth:** `{decoded}`")
-                    except:
-                        pass
-
         except Exception:
             st.error("Error parsing payload details.")
     else:
