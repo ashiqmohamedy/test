@@ -5,7 +5,7 @@ import time
 import base64
 
 # --- CONFIGURATION ---
-TOPIC = "wh_receiver_8824"
+TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 
 # --- UI SETUP ---

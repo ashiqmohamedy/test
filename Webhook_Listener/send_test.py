@@ -7,7 +7,7 @@ import urllib3
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # CONFIG
-TOPIC = "wh_receiver_8824"
+TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
 URL = f"https://ntfy.sh/{TOPIC}"
 
 
