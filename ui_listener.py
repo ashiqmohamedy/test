@@ -5,9 +5,9 @@ import time
 from datetime import datetime
 import pytz
 
-# --- 1. DYNAMIC CONFIGURATION ---
-query_params = st.query_params
-TOPIC = query_params.get("topic", "wh_receiver_a1b2-c3d4-e5f6-g7h8")
+# --- 1. CONFIGURATION ---
+# Fixed as per your requirement
+TOPIC = "wh_receiver_a1b2-c3d4-e5f6-g7h8"
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 USER_TZ = 'Asia/Kolkata'
 
@@ -16,13 +16,13 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* 5rem padding ensures it stays below the RHS top menu */
-        .block-container { padding-top: 5rem !important; max-width: 98% !important; }
+        /* Pushes content down to clear the top-right Streamlit wrapper */
+        .block-container { padding-top: 5.5rem !important; max-width: 98% !important; }
 
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
-        /* Sidebar Buttons: Reverted to Borderless */
+        /* Sidebar Buttons: Strictly Borderless & Transparent */
         .stButton > button { 
             height: 32px !important; 
             margin-bottom: -18px !important; 
@@ -33,19 +33,22 @@ st.markdown("""
             border: none !important; 
             background-color: transparent !important; 
             padding-left: 5px !important; 
+            box-shadow: none !important;
         }
-        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
+        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; border: none !important; }
 
-        /* Header Alignment */
+        /* Header Alignment Logic */
         .endpoint-label {
             font-family: 'Courier New', Courier, monospace;
             font-size: 13px;
             font-weight: 700;
             color: #10b981;
-            line-height: 45px; /* Matches height of st.code for middle alignment */
             margin: 0px !important;
+            padding-top: 10px;
+            white-space: nowrap;
         }
 
+        /* Limits width of URL box */
         div[data-testid="stCode"] { 
             max-width: 450px !important; 
         }
@@ -62,8 +65,8 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# --- 4. COMPACT HEADER (Properly Aligned) ---
-h_col1, h_col2, h_col3 = st.columns([1.5, 3, 5])
+# --- 4. TOP HEADER ---
+h_col1, h_col2, h_col3 = st.columns([1.5, 3.5, 5])
 
 with h_col1:
     st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
@@ -71,7 +74,6 @@ with h_col1:
 with h_col2:
     st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 
-# col3 is empty to prevent the box from stretching
 st.divider()
 
 # 5. SIDEBAR
