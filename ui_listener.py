@@ -28,7 +28,6 @@ st.markdown("""
     <style>
         .block-container { padding-top: 2rem !important; max-width: 98% !important; }
 
-        /* Sidebar Brand Styling */
         .brand-title {
             font-size: 1.8rem !important;
             font-weight: 800 !important;
@@ -43,14 +42,10 @@ st.markdown("""
             margin-top: 5px !important;
         }
 
-        /* Sidebar layout tightening */
         [data-testid="stSidebarUserContent"] { padding-top: 1rem !important; }
         div[data-testid="stTextInput"] { margin-top: -15px !important; }
-
-        /* JSON display styling */
         div[data-testid="stJson"] { line-height: 1.1 !important; }
 
-        /* Borderless Sidebar Log Styling */
         .stButton > button {
             height: 32px !important;
             margin-bottom: -18px !important;
@@ -72,7 +67,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Session State Initialization
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
 if 'selected_msg' not in st.session_state:
@@ -95,7 +89,6 @@ try:
 
     # --- SIDEBAR ---
     with st.sidebar:
-        # Branded App Name with Separator
         st.markdown('<p class="brand-title">🪝 Webhook Tester</p>', unsafe_allow_html=True)
         st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
@@ -112,7 +105,6 @@ try:
                 st.rerun()
 
         st.divider()
-
         search_query = st.text_input("", placeholder="🔍 Filter feed...", label_visibility="collapsed").lower()
 
         if not valid_messages:
@@ -144,7 +136,6 @@ try:
     if selected:
         try:
             full_content = json.loads(selected.get('message'))
-
             if isinstance(full_content, dict) and "headers" in full_content:
                 payload = full_content.get('payload', {})
                 headers = full_content.get('headers', {})
@@ -152,7 +143,7 @@ try:
                 payload = full_content
                 headers = {"Notice": "Standard payload"}
 
-            # Top Meta Row (ID and Download)
+            # Meta Row
             c_meta, c_dl = st.columns([3, 1])
             with c_meta:
                 st.markdown(f"**Payload ID:** `{selected.get('id')}`")
@@ -160,13 +151,13 @@ try:
                 st.download_button("💾 Download JSON", json.dumps(payload, indent=4), f"{selected.get('id')}.json",
                                    use_container_width=True)
 
-            # 1. JSON Body First
+            # JSON Body
             st.markdown("**📦 JSON Body**")
             st.json(payload, expanded=True)
 
             st.divider()
 
-            # 2. Full Headers Below
+            # Headers Below
             with st.expander("🌐 Full HTTP Headers", expanded=True):
                 st.json(headers)
                 auth_h = headers.get('Authorization', '')
