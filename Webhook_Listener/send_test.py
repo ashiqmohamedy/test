@@ -1,14 +1,28 @@
 import requests
-from requests.auth import HTTPBasicAuth
 import json
+import base64
 
-url = "https://ntfy.sh/ashiq_webhook_test_2026_xyz"
-auth = HTTPBasicAuth('my_username', 'my_password')
+# Use the same credentials as the UI
+user, pw = "admin", "secret123"
+valid_auth = f"Basic {base64.b64encode(f'{user}:{pw}'.encode()).decode()}"
+wrong_auth = f"Basic {base64.b64encode(b'hacker:1234').decode()}"
 
-# We bundle headers into the message so ntfy carries them to our UI
-payload = {
-    "headers": {"Authorization": "Basic bXlfdXNlcm5hbWU6bXlfcGFzc3dvcmQ="},  # Simulated header
-    "payload": {"event": "secure_data", "id": 101}
-}
+URL = "https://ntfy.sh/ashiq_webhook_test_2026_xyz"
 
-requests.post(url, data=json.dumps(payload), verify=False)
+
+def send_test(auth_value):
+    payload = {
+        "headers": {"Authorization": auth_value},
+        "payload": {"event": "login_attempt", "ip": "192.168.1.1"}
+    }
+    requests.post(URL, data=json.dumps(payload), verify=False)
+
+
+# 1. Send Valid
+send_test(valid_auth)
+# 2. Send Invalid
+send_test(wrong_auth)
+# 3. Send No Auth
+requests.post(URL, data=json.dumps({"payload": {"test": "no auth"}}), verify=False)
+
+print("Check your UI for Green, Red, and Gray boxes!")
