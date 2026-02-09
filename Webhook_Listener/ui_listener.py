@@ -5,13 +5,13 @@ import time
 import base64
 
 # --- CONFIGURATION ---
-TOPIC = "ashiq_webhook_test_2026_xyz"
+TOPIC = "wh_receiver_8824"  # Replace 8824 with any 4 random digits
 URL = f"https://ntfy.sh/{TOPIC}/json?poll=1"
 
 # --- UI SETUP ---
 # Restoring your original branding
 st.set_page_config(page_title="Webhook Tester", layout="wide")
-st.title("🪝 Webhook Tester")
+st.title("Webhook Tester")
 
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0
@@ -24,6 +24,11 @@ with st.sidebar:
         st.rerun()
     st.write("---")
     refresh_speed = st.slider("Refresh rate (seconds)", 2, 20, 5)
+
+with st.sidebar:
+    st.header("Endpoint")
+    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+    st.caption("Copy this URL into your application's webhook settings.")
 
 # --- MAIN LOGIC ---
 try:
@@ -51,7 +56,7 @@ try:
 
                     timestamp = time.strftime('%H:%M:%S', time.localtime(msg.get('time')))
 
-                    with st.expander(f"📥 Request at {timestamp}{label_suffix}"):
+                    with st.expander(f"📥 Webhook received at {timestamp}{label_suffix}"):
                         col1, col2 = st.columns(2)
                         with col1:
                             st.markdown("**Body**")
