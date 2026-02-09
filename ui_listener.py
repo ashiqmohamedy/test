@@ -89,7 +89,7 @@ try:
                 auth_header = headers.get('Authorization', '')
                 lock_icon = " 🔒" if "Basic" in auth_header else ""
 
-                with st.expander(f"📥 Webhook received from at {timestamp}{lock_icon}"):
+                with st.expander(f"📥 Webhook received at {timestamp}{lock_icon}"):
                     st.markdown("### 📦 JSON Body")
                     st.json(payload)
 
