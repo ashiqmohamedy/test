@@ -47,7 +47,7 @@ if 'viewed_ids' not in st.session_state:
 if 'current_feed' not in st.session_state:
     st.session_state.current_feed = []
 
-# 2. THE EXECUTION GATE: Handle Reset at the very start
+# 2. THE RESET LOGIC (Moved to top to prevent rendering old data)
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
@@ -57,19 +57,17 @@ with st.sidebar:
         st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
         st.session_state.current_feed = []
-        st.rerun()  # Immediate exit and restart
+        st.rerun()  # Forces immediate restart before Section 3-5 can run
 
-# --- BYPASS DATA FETCH IF REFRESHING ---
 # 3. Data Fetching & Strict Filtering
-new_valid_list = []
 try:
     r = requests.get(URL, timeout=2)
     if r.status_code == 200:
+        new_valid_list = []
         raw_lines = r.text.strip().split('\n')
         for line in raw_lines:
             if not line: continue
             msg = json.loads(line)
-            # Only allow messages newer than the last Reset
             if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
                 new_valid_list.append(msg)
 
@@ -82,11 +80,11 @@ except:
 with st.sidebar:
     st.divider()
     search_query = st.text_input(
-        label="Search feed",
+        label="Filter Feed",
         placeholder="🔍 Filter feed...",
         key="search_bar",
         label_visibility="collapsed"
-    )
+    ).lower()
 
     if not st.session_state.current_feed:
         st.caption("Awaiting new data...")
@@ -142,6 +140,7 @@ if st.session_state.selected_msg:
     except:
         st.error("Error parsing payload.")
 else:
+    # This info box is what the user sees after a Reset (No old data blinking)
     st.info("👈 Select a request from the filtered feed to inspect details.")
 
 # 6. Auto-Refresh Loop
