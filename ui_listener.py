@@ -60,22 +60,13 @@ st.markdown("""
         /* Viewing Panel Compactness */
         [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -10px !important; }
 
-        .header-container {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 14px;
-            font-weight: 700;
-            color: #10b981;
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        .url-box {
-            background-color: #1e1e1e;
-            padding: 4px 10px;
-            border-radius: 4px;
-            color: #ffffff;
-            font-weight: 400;
-            font-size: 13px;
+        .endpoint-label { 
+            font-family: 'Courier New', Courier, monospace; 
+            font-size: 14px; 
+            font-weight: 700; 
+            color: #10b981; 
+            margin-top: 10px !important;
+            white-space: nowrap;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -89,13 +80,15 @@ if 'initialized' not in st.session_state:
     st.session_state.viewed_ids = set()
     st.session_state.initialized = True
 
-# --- 4. TOP HEADER (Fixed Overlap) ---
-st.markdown(f"""
-    <div class="header-container">
-        <span>📡 ACTIVE ENDPOINT</span>
-        <span class="url-box">https://ntfy.sh/{TOPIC}</span>
-    </div>
-""", unsafe_allow_html=True)
+# --- 4. TOP HEADER (Restored Copy Icon + Single Line) ---
+# We use a column layout with very specific widths to prevent overlap
+col1, col2, col3 = st.columns([1.6, 4, 3])
+with col1:
+    st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
+with col2:
+    # st.code restores the copy icon
+    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+# col3 is empty to act as a spacer and keep the URL box from stretching
 
 st.divider()
 
