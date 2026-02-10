@@ -25,7 +25,7 @@ st.markdown("""
         .stButton > button { 
             height: 32px !important; 
             margin-bottom: -18px !important; 
-            border-radius: 0px !important; 
+            border-radius: 4px !important; 
             text-align: left !important; 
             font-family: 'Courier New', Courier, monospace !important; 
             font-size: 11px !important; 
@@ -46,7 +46,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. State Management
-# We initialize clear_before only once.
+# 'clear_before' is the key to the Reset function
 if 'clear_before' not in st.session_state:
     st.session_state.clear_before = 0.0
 if 'selected_msg' not in st.session_state:
@@ -59,19 +59,23 @@ st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_h
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
 
-# --- 5. DATA FETCHING (Now strictly filtered by Session State) ---
+# --- 5. DATA FETCHING (Strict Timestamp Filtering) ---
 feed = []
 try:
+    # Use verify=False for SSL issues; timeout 5s
     r = requests.get(URL, timeout=5, verify=False)
     if r.status_code == 200:
         lines = r.text.strip().split('\n')
         for line in lines:
             if not line: continue
             msg = json.loads(line)
-            # Only add if it's a message event and its timestamp is GREATER than our Reset time
-            m_time = float(msg.get('time', 0))
-            if msg.get('event') == 'message' and m_time > st.session_state.clear_before:
+
+            # STICKY FILTER: Only accept messages newer than the 'clear_before' timestamp
+            msg_time = float(msg.get('time', 0))
+            if msg.get('event') == 'message' and msg_time > st.session_state.clear_before:
                 feed.append(msg)
+
+        # Sort newest at the top
         feed.sort(key=lambda x: x.get('time', 0), reverse=True)
 except:
     pass
@@ -81,9 +85,8 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    # --- RESET BUTTON: UPDATED LOGIC ---
+    # RESET BUTTON: Captures current time to 'hide' all existing messages
     if st.button("🔄 Reset", use_container_width=True):
-        # Update the timestamp so Section 5 ignores all existing data on the next loop
         st.session_state.clear_before = time.time()
         st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
@@ -93,15 +96,18 @@ with st.sidebar:
     search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
                                  label_visibility="collapsed").lower()
 
-    # List the feed
+    # Render Feed
     for msg in feed:
         if search_query and search_query not in msg.get('message', '').lower(): continue
+
         m_id = msg.get('id', 'N/A')
         ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
         is_new = m_id not in st.session_state.viewed_ids
 
         btn_label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
-        if st.button(btn_label, key=f"final_btn_{m_id}", use_container_width=True):
+
+        # Using a unique key and st.rerun to ensure RHS updates immediately
+        if st.button(btn_label, key=f"feed_btn_{m_id}", use_container_width=True):
             st.session_state.selected_msg = msg
             st.session_state.viewed_ids.add(m_id)
             st.rerun()
@@ -109,7 +115,7 @@ with st.sidebar:
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
-    # Final check: Don't show the message if it's older than the Reset time
+    # Only show if it hasn't been "Reset" away
     if float(sel.get('time', 0)) > st.session_state.clear_before:
         try:
             content = json.loads(sel.get('message'))
@@ -123,7 +129,7 @@ if st.session_state.selected_msg:
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
 
-# --- 8. REFRESH LOOP ---
-# Increased to 5 seconds to reduce "blinking" and give the Reset state time to lock in
-time.sleep(5)
+# --- 8. STABLE REFRESH LOOP ---
+# Slowed down slightly to 4 seconds to improve click stability
+time.sleep(4)
 st.rerun()
