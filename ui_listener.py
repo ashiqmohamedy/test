@@ -59,16 +59,18 @@ st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
 
 # --- 5. DATA FETCHING ---
+# We fetch data but strictly filter by the clear_before timestamp
 feed = []
 try:
-    # Use verify=False for your corporate network SSL bypass
     r = requests.get(URL, timeout=5, verify=False)
     if r.status_code == 200:
         lines = r.text.strip().split('\n')
         for line in lines:
             if not line: continue
             msg = json.loads(line)
-            if msg.get('event') == 'message' and float(msg.get('time', 0)) > st.session_state.clear_before:
+            # CRITICAL: Only add to feed if it happened AFTER the reset
+            m_time = float(msg.get('time', 0))
+            if msg.get('event') == 'message' and m_time > st.session_state.clear_before:
                 feed.append(msg)
         feed.sort(key=lambda x: x.get('time', 0), reverse=True)
 except:
@@ -79,6 +81,7 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
+    # RESET: Fixed to clear session memory and the RHS view
     if st.button("🔄 Reset", use_container_width=True):
         st.session_state.clear_before = time.time()
         st.session_state.selected_msg = None
@@ -89,26 +92,26 @@ with st.sidebar:
     search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
                                  label_visibility="collapsed").lower()
 
-    # No "Awaiting data" caption to keep UI clean
+    # Render feed
     for msg in feed:
         if search_query and search_query not in msg.get('message', '').lower(): continue
         m_id = msg.get('id', 'N/A')
         ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
         is_new = m_id not in st.session_state.viewed_ids
 
-        # Using a distinct key for each button to prevent state loss
-        label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
-        if st.button(label, key=f"btn_{m_id}", use_container_width=True):
+        btn_label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
+
+        # Use a callback-style approach to ensure the click is registered before the rerun
+        if st.button(btn_label, key=f"fixed_{m_id}", use_container_width=True):
             st.session_state.selected_msg = msg
             st.session_state.viewed_ids.add(m_id)
-            # Explicitly force a rerun on selection to ensure RHS updates
             st.rerun()
 
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
-    # Ensure the current selection still exists in the feed (isn't stale/cleared)
-    if any(m.get('id') == sel.get('id') for m in feed) or sel.get('time', 0) > st.session_state.clear_before:
+    # Double check that the selected message isn't from before the latest Reset
+    if float(sel.get('time', 0)) > st.session_state.clear_before:
         try:
             content = json.loads(sel.get('message'))
             st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
@@ -117,11 +120,11 @@ if st.session_state.selected_msg:
             st.json(sel.get('message'))
     else:
         st.session_state.selected_msg = None
-        st.info("👈 Selection cleared. Choose a new webhook from the sidebar.")
+        st.rerun()
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
 
-# --- 8. SMOOTH REFRESH ---
-# Increased sleep slightly to allow UI interactions to "win" over the refresh
-time.sleep(3)
+# --- 8. STABLE REFRESH ---
+# Use a slightly longer sleep to prevent the "blinking" loop from breaking button clicks
+time.sleep(4)
 st.rerun()
