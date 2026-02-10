@@ -24,14 +24,20 @@ if 'initialized' not in st.session_state:
     st.session_state.selected_msg, st.session_state.viewed_ids = None, set()
     st.session_state.initialized = True
 
-# --- DYNAMIC CSS FOR PERSISTENT HIGHLIGHT & PULSE ---
+# --- DYNAMIC CSS ---
 active_id = st.session_state.selected_msg.get('id') if st.session_state.selected_msg else "NONE"
 
 st.markdown(f"""
     <style>
         .block-container {{ padding-top: 5.5rem !important; max-width: 98% !important; }}
-        div[data-testid="stJson"] > div {{ overflow: visible !important; max-height: none !important; }}
+
+        /* Kill all JSON internal scrollbars */
+        div[data-testid="stJson"], div[data-testid="stJson"] > div, div[data-testid="stJson"] pre {{
+            overflow: visible !important;
+            max-height: none !important;
+        }}
         div[data-testid="stJson"] {{ line-height: 1.0 !important; }}
+
         hr {{ margin-top: 0.5rem !important; margin-bottom: 0.8rem !important; }}
 
         /* Sidebar Branding */
@@ -53,32 +59,34 @@ st.markdown(f"""
             transition: all 0.3s ease;
         }}
 
-        /* PERSISTENT HIGHLIGHT: Targets the selected message ID */
+        /* PERSISTENT HIGHLIGHT */
         div[data-testid="stSidebar"] div[data-key="m_{active_id}"] button {{
             background-color: rgba(16, 185, 129, 0.2) !important;
             color: #10b981 !important;
             border-left: 4px solid #10b981 !important;
-            font-weight: 800 !important;
         }}
+
+        /* Typography Differentiation: Bold for Unread */
+        .unread-msg > div > button {{ font-weight: 800 !important; color: #ffffff !important; }}
+        .read-msg > div > button {{ font-weight: 400 !important; color: #aaaaaa !important; font-style: italic; }}
 
         .stButton > button:hover {{ background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }}
 
-        /* Pro Polish: Pulse Animation for Status */
-        @keyframes pulse {{
-            0% {{ opacity: 1; }}
-            50% {{ opacity: 0.3; }}
-            100% {{ opacity: 1; }}
-        }}
+        @keyframes pulse {{ 0% {{ opacity: 1; }} 50% {{ opacity: 0.3; }} 100% {{ opacity: 1; }} }}
         .status-pulse {{ animation: pulse 2s infinite; font-size: 12px; margin-right: 5px; }}
 
         .endpoint-label {{ font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-top: 10px !important; white-space: nowrap; }}
         .id-pill {{ background-color: #1e1e1e; padding: 2px 8px; border-radius: 12px; border: 1px solid #333; font-family: monospace; color: #10b981; font-size: 12px; }}
+
+        /* Compact Download Button in Header */
+        div[data-testid="column"] button[kind="secondary"] {{
+            margin-top: 2px !important;
+            height: 2.2rem !important;
+        }}
     </style>
 """, unsafe_allow_html=True)
 
 # --- 4. TOP HEADER ---
-col1, col2, col3 = st.columns([1.6, 4, 3])
-# We assume green unless the request block fails
 status_icon = "🟢"
 
 # --- 5. DATA FETCHING ---
@@ -105,14 +113,31 @@ try:
 except:
     status_icon = "🔴"
 
+# --- RENDER HEADER ---
+col1, col2, col3, col_dl = st.columns([1.6, 3, 1, 1.5])
 with col1:
     st.markdown(f'<p class="endpoint-label"><span class="status-pulse">{status_icon}</span> ACTIVE ENDPOINT</p>',
                 unsafe_allow_html=True)
 with col2:
     st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+
+# --- 6. MAIN CONTENT PRE-LOGIC (For Download Button availability) ---
+dl_data = None
+if st.session_state.selected_msg:
+    try:
+        full = json.loads(st.session_state.selected_msg.get('message'))
+        dl_data = json.dumps(full.get('payload', full), indent=4)
+    except:
+        pass
+
+with col_dl:
+    if dl_data:
+        st.download_button("💾 Download JSON", dl_data, f"wh_{st.session_state.selected_msg.get('id')}.json",
+                           "application/json", use_container_width=True)
+
 st.divider()
 
-# --- 6. SIDEBAR ---
+# --- 7. SIDEBAR ---
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
@@ -130,27 +155,26 @@ with st.sidebar:
         dt_obj = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ))
         ts_str = dt_obj.strftime('%d-%b-%y, %H:%M:%S')
 
-        # The blue dot stays until the ID is in viewed_ids
-        label = f"{'🔵' if m_id not in st.session_state.viewed_ids else '  '} {ts_str} | {msg.get('extracted_ip')}"
+        is_unread = m_id not in st.session_state.viewed_ids
+        label = f"{'🔵' if is_unread else '  '} {ts_str} | {msg.get('extracted_ip')}"
 
+        # CSS class injection for Bold/Italic logic
+        st.markdown(f'<div class="{"unread-msg" if is_unread else "read-msg"}">', unsafe_allow_html=True)
         if st.button(label, key=f"m_{m_id}", use_container_width=True):
             st.session_state.selected_msg = msg
             st.session_state.viewed_ids.add(m_id)
             st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# --- 7. MAIN CONTENT ---
+# --- 8. MAIN CONTENT VIEW ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     if float(sel.get('time', 0)) > st.session_state.session_gate:
         try:
             full = json.loads(sel.get('message'))
             p, h = full.get('payload', full), full.get('headers', {"Info": "Direct payload received"})
-            c_m, c_d = st.columns([4, 1])
-            with c_m:
-                st.markdown(f"Viewing Request: <span class='id-pill'>{sel.get('id')}</span>", unsafe_allow_html=True)
-            with c_d:
-                st.download_button("💾 Download JSON", json.dumps(p, indent=4), f"wh_{sel.get('id')}.json",
-                                   "application/json", use_container_width=True)
+
+            st.markdown(f"Viewing Request: <span class='id-pill'>{sel.get('id')}</span>", unsafe_allow_html=True)
             st.markdown("**📦 JSON Body**")
             st.json(p)
             with st.expander("🌐 View HTTP Headers", expanded=False):
