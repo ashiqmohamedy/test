@@ -19,9 +19,9 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* 1. Fix Top Header Visibility */
+        /* 1. Fix Top Header Visibility - Pushed down further */
         .block-container { 
-            padding-top: 2.5rem !important; 
+            padding-top: 4.5rem !important; 
             max-width: 98% !important; 
         }
 
@@ -36,7 +36,7 @@ st.markdown("""
         }
 
         /* 3. Compact Header Spacing */
-        .stCode { margin-bottom: -10px !important; }
+        .stCode { margin-bottom: 0px !important; }
         hr { margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
 
         /* Sidebar Styles */
@@ -61,7 +61,15 @@ st.markdown("""
 
         /* General Compactness */
         [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -8px !important; }
-        .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 2px !important; }
+        .endpoint-label { 
+            font-family: 'Courier New', Courier, monospace; 
+            font-size: 14px; 
+            font-weight: 700; 
+            color: #10b981; 
+            margin-top: 8px !important;
+            margin-bottom: 0px !important;
+            white-space: nowrap;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -74,9 +82,13 @@ if 'initialized' not in st.session_state:
     st.session_state.viewed_ids = set()
     st.session_state.initialized = True
 
-# --- 4. TOP HEADER ---
-st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
-st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+# --- 4. TOP HEADER (One-Line Layout) ---
+col_lab, col_url, col_spacer = st.columns([1.2, 3, 4])
+with col_lab:
+    st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
+with col_url:
+    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+
 st.divider()
 
 # --- 5. DATA FETCHING ---
