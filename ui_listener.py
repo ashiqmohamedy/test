@@ -23,7 +23,6 @@ st.markdown("""
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
-        /* Sidebar Buttons */
         .stButton > button { 
             height: 32px !important; 
             margin-bottom: -18px !important; 
@@ -40,11 +39,7 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
 
-        /* JSON Line Spacing Reduction */
-        div[data-testid="stJson"] { 
-            line-height: 1.1 !important; 
-        }
-
+        div[data-testid="stJson"] { line-height: 1.1 !important; }
         .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 5px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -77,6 +72,17 @@ try:
             if (msg.get('event') == 'message' and
                     m_time > st.session_state.session_gate and
                     m_id not in st.session_state.seen_ids):
+
+                # Pre-extract the IP for the sidebar label
+                source_ip = "Unknown IP"
+                try:
+                    inner_msg = json.loads(msg.get('message', '{}'))
+                    payload = inner_msg.get('payload', inner_msg)
+                    source_ip = payload.get('sannavServerIp', 'No IP')
+                except:
+                    pass
+
+                msg['extracted_ip'] = source_ip
                 st.session_state.feed_data.append(msg)
                 st.session_state.seen_ids.add(m_id)
 
@@ -114,7 +120,12 @@ with st.sidebar:
             time_str = dt_obj.strftime('%H:%M:%S')
             is_new = m_id not in st.session_state.viewed_ids
 
-            label = f"{'🔵' if is_new else '  '} {date_str}, {time_str} | {m_id}"
+            # Use the extracted IP for the label
+            ip_label = msg.get('extracted_ip', 'No IP')
+
+            # NEW SIDEBAR FORMAT: Date, Time | IP
+            label = f"{'🔵' if is_new else '  '} {date_str}, {time_str} | {ip_label}"
+
             if st.button(label, key=f"msg_{m_id}", use_container_width=True):
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
@@ -129,9 +140,9 @@ if st.session_state.selected_msg:
             payload = full_content.get('payload', full_content)
             headers = full_content.get('headers', {"Info": "Direct payload received"})
 
-            # Header Area with Download Button
             col_meta, col_dl = st.columns([4, 1])
             with col_meta:
+                # FULL ID remains visible here in the viewing panel
                 st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
             with col_dl:
                 st.download_button(
