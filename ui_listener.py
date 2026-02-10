@@ -19,27 +19,25 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* 1. Fix Top Header Visibility - Pushed down further */
+        /* 1. Adjusted Padding to show header clearly */
         .block-container { 
-            padding-top: 4.5rem !important; 
+            padding-top: 5.5rem !important; 
             max-width: 98% !important; 
         }
 
-        /* 2. Remove Internal JSON Scrollbar */
+        /* 2. Remove Internal JSON Scrollbar and compact lines */
         div[data-testid="stJson"] > div {
             overflow: visible !important;
             max-height: none !important;
         }
         div[data-testid="stJson"] { 
             line-height: 1.0 !important; 
-            overflow: visible !important;
         }
 
         /* 3. Compact Header Spacing */
-        .stCode { margin-bottom: 0px !important; }
-        hr { margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
+        hr { margin-top: 0.5rem !important; margin-bottom: 0.8rem !important; }
 
-        /* Sidebar Styles */
+        /* Sidebar Styles - DO NOT CHANGE */
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
@@ -59,16 +57,25 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
 
-        /* General Compactness */
-        [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -8px !important; }
-        .endpoint-label { 
-            font-family: 'Courier New', Courier, monospace; 
-            font-size: 14px; 
-            font-weight: 700; 
-            color: #10b981; 
-            margin-top: 8px !important;
-            margin-bottom: 0px !important;
-            white-space: nowrap;
+        /* Viewing Panel Compactness */
+        [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -10px !important; }
+
+        .header-container {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 14px;
+            font-weight: 700;
+            color: #10b981;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .url-box {
+            background-color: #1e1e1e;
+            padding: 4px 10px;
+            border-radius: 4px;
+            color: #ffffff;
+            font-weight: 400;
+            font-size: 13px;
         }
     </style>
 """, unsafe_allow_html=True)
@@ -82,12 +89,13 @@ if 'initialized' not in st.session_state:
     st.session_state.viewed_ids = set()
     st.session_state.initialized = True
 
-# --- 4. TOP HEADER (One-Line Layout) ---
-col_lab, col_url, col_spacer = st.columns([1.2, 3, 4])
-with col_lab:
-    st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
-with col_url:
-    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+# --- 4. TOP HEADER (Fixed Overlap) ---
+st.markdown(f"""
+    <div class="header-container">
+        <span>📡 ACTIVE ENDPOINT</span>
+        <span class="url-box">https://ntfy.sh/{TOPIC}</span>
+    </div>
+""", unsafe_allow_html=True)
 
 st.divider()
 
@@ -186,7 +194,7 @@ if st.session_state.selected_msg:
             with st.expander("🌐 View HTTP Headers", expanded=False):
                 st.json(headers)
         except Exception as e:
-            st.error(f"Error parsing content: {e}")
+            st.error(f"Error parsing content")
             st.json(sel.get('message'))
     else:
         st.session_state.selected_msg = None
