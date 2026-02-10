@@ -19,22 +19,9 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* 1. Adjusted Padding to show header clearly */
-        .block-container { 
-            padding-top: 5.5rem !important; 
-            max-width: 98% !important; 
-        }
-
-        /* 2. Remove Internal JSON Scrollbar and compact lines */
-        div[data-testid="stJson"] > div {
-            overflow: visible !important;
-            max-height: none !important;
-        }
-        div[data-testid="stJson"] { 
-            line-height: 1.0 !important; 
-        }
-
-        /* 3. Compact Header Spacing */
+        .block-container { padding-top: 5.5rem !important; max-width: 98% !important; }
+        div[data-testid="stJson"] > div { overflow: visible !important; max-height: none !important; }
+        div[data-testid="stJson"] { line-height: 1.0 !important; }
         hr { margin-top: 0.5rem !important; margin-bottom: 0.8rem !important; }
 
         /* Sidebar Styles */
@@ -50,46 +37,46 @@ st.markdown("""
             font-size: 10.5px !important; 
             border: none !important; 
             background-color: transparent !important; 
-            padding-left: 2px !important; 
+            padding-left: 5px !important;
             box-shadow: none !important;
             white-space: nowrap !important;
             overflow: hidden !important;
         }
-        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
 
-        /* Viewing Panel Compactness */
+        /* Highlight for Selected Item */
+        .active-btn > div > button {
+            background-color: rgba(16, 185, 129, 0.15) !important;
+            color: #10b981 !important;
+            border-left: 3px solid #10b981 !important;
+        }
+
+        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
         [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -10px !important; }
 
-        .endpoint-label { 
-            font-family: 'Courier New', Courier, monospace; 
-            font-size: 14px; 
-            font-weight: 700; 
-            color: #10b981; 
-            margin-top: 10px !important;
-            white-space: nowrap;
-        }
+        .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-top: 10px !important; white-space: nowrap; }
+
+        /* Metadata Pill */
+        .id-pill { background-color: #1e1e1e; padding: 2px 8px; border-radius: 12px; border: 1px solid #333; font-family: monospace; color: #10b981; font-size: 12px; }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Session State Management
+# 3. Session State
 if 'initialized' not in st.session_state:
     st.session_state.session_gate = time.time()
-    st.session_state.feed_data = []
-    st.session_state.seen_ids = set()
-    st.session_state.selected_msg = None
-    st.session_state.viewed_ids = set()
+    st.session_state.feed_data, st.session_state.seen_ids = [], set()
+    st.session_state.selected_msg, st.session_state.viewed_ids = None, set()
     st.session_state.initialized = True
 
 # --- 4. TOP HEADER ---
 col1, col2, col3 = st.columns([1.6, 4, 3])
+status_icon = "🟢"
 with col1:
-    st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="endpoint-label">{status_icon} ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
 with col2:
     st.code(f"https://ntfy.sh/{TOPIC}", language="text")
-
 st.divider()
 
-# --- 5. DATA FETCHING (Stable Top-Down) ---
+# --- 5. DATA FETCHING ---
 try:
     r = requests.get(URL, timeout=5, verify=False)
     if r.status_code == 200:
@@ -97,101 +84,71 @@ try:
         for line in raw_lines:
             if not line: continue
             msg = json.loads(line)
-            m_id = msg.get('id')
-            m_time = float(msg.get('time', 0))
-
-            if (msg.get('event') == 'message' and
-                    m_time > st.session_state.session_gate and
-                    m_id not in st.session_state.seen_ids):
-
-                source_ip = "Unknown IP"
+            m_id, m_time = msg.get('id'), float(msg.get('time', 0))
+            if (
+                    msg.get('event') == 'message' and m_time > st.session_state.session_gate and m_id not in st.session_state.seen_ids):
+                source_ip = "No IP"
                 try:
-                    inner_msg = json.loads(msg.get('message', '{}'))
-                    payload = inner_msg.get('payload', inner_msg)
-                    source_ip = payload.get('sannavServerIp', 'No IP')
+                    inner = json.loads(msg.get('message', '{}'))
+                    source_ip = inner.get('payload', inner).get('sannavServerIp', 'No IP')
                 except:
                     pass
-
                 msg['extracted_ip'] = source_ip
                 st.session_state.feed_data.append(msg)
                 st.session_state.seen_ids.add(m_id)
-
         st.session_state.feed_data.sort(key=lambda x: x.get('time', 0), reverse=True)
 except:
-    pass
+    status_icon = "🔴"
 
 # --- 6. SIDEBAR ---
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
-
     if st.button("🔄 Reset", use_container_width=True):
-        st.session_state.feed_data = []
-        st.session_state.seen_ids = set()
-        st.session_state.viewed_ids = set()
-        st.session_state.selected_msg = None
+        st.session_state.feed_data, st.session_state.seen_ids = [], set()
+        st.session_state.selected_msg, st.session_state.viewed_ids = None, set()
         st.session_state.session_gate = time.time()
         st.rerun()
-
     st.divider()
-    search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
-                                 label_visibility="collapsed").lower()
+    search = st.text_input("Filter", placeholder="🔍 Filter...", key="s_bar", label_visibility="collapsed").lower()
 
-    if not st.session_state.feed_data:
-        st.markdown(
-            '<p style="font-size:11px; color:grey; padding-left:10px; margin-top:20px;">Listening for new payloads...</p>',
-            unsafe_allow_html=True)
-    else:
-        for msg in st.session_state.feed_data:
-            if search_query and search_query not in msg.get('message', '').lower(): continue
-            m_id = msg.get('id', 'N/A')
-            dt_obj = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ))
-            date_str = dt_obj.strftime('%d-%b-%y')
-            time_str = dt_obj.strftime('%H:%M:%S')
-            is_new = m_id not in st.session_state.viewed_ids
-            ip_label = msg.get('extracted_ip', 'No IP')
+    for msg in st.session_state.feed_data:
+        if search and search not in msg.get('message', '').lower(): continue
+        m_id = msg.get('id', 'N/A')
+        ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime(
+            '%d-%b-%y, %H:%M:%S')
+        is_active = st.session_state.selected_msg and st.session_state.selected_msg.get('id') == m_id
 
-            label = f"{'🔵' if is_new else '  '} {date_str}, {time_str} | {ip_label}"
-            if st.button(label, key=f"msg_{m_id}", use_container_width=True):
-                st.session_state.selected_msg = msg
-                st.session_state.viewed_ids.add(m_id)
-                st.rerun()
+        label = f"{'🔵' if m_id not in st.session_state.viewed_ids else '  '} {ts} | {msg.get('extracted_ip')}"
+
+        # Wrapping in a div to apply active styling
+        st.markdown(f'<div class="{"active-btn" if is_active else ""}">', unsafe_allow_html=True)
+        if st.button(label, key=f"m_{m_id}", use_container_width=True):
+            st.session_state.selected_msg = msg
+            st.session_state.viewed_ids.add(m_id)
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     if float(sel.get('time', 0)) > st.session_state.session_gate:
-        try:
-            full_content = json.loads(sel.get('message'))
-            payload = full_content.get('payload', full_content)
-            headers = full_content.get('headers', {"Info": "Direct payload received"})
-
-            col_meta, col_dl = st.columns([4, 1])
-            with col_meta:
-                st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
-            with col_dl:
-                st.download_button(
-                    label="💾 Download JSON",
-                    data=json.dumps(payload, indent=4),
-                    file_name=f"webhook_{sel.get('id')}.json",
-                    mime="application/json",
-                    use_container_width=True
-                )
-
-            st.markdown("**📦 JSON Body**")
-            st.json(payload)
-
-            with st.expander("🌐 View HTTP Headers", expanded=False):
-                st.json(headers)
-        except Exception as e:
-            st.error(f"Error parsing content")
-            st.json(sel.get('message'))
+        full = json.loads(sel.get('message'))
+        p, h = full.get('payload', full), full.get('headers', {"Info": "Direct payload"})
+        c_m, c_d = st.columns([4, 1])
+        with c_m:
+            st.markdown(f"Viewing Request: <span class='id-pill'>{sel.get('id')}</span>", unsafe_allow_html=True)
+        with c_d:
+            st.download_button("💾 Download JSON", json.dumps(p, indent=4), f"wh_{sel.get('id')}.json",
+                               "application/json", use_container_width=True)
+        st.markdown("**📦 JSON Body**")
+        st.json(p)
+        with st.expander("🌐 View HTTP Headers", expanded=False):
+            st.json(h)
     else:
-        st.session_state.selected_msg = None
-        st.rerun()
+        st.session_state.selected_msg = None; st.rerun()
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
 
-# --- 8. STABLE REFRESH ---
-time.sleep(4)
+time.sleep(4);
 st.rerun()
