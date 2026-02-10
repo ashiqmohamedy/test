@@ -19,13 +19,10 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* 1. Adjusted Padding to show header clearly */
         .block-container { 
             padding-top: 5.5rem !important; 
             max-width: 98% !important; 
         }
-
-        /* 2. Remove Internal JSON Scrollbar and compact lines */
         div[data-testid="stJson"] > div {
             overflow: visible !important;
             max-height: none !important;
@@ -33,11 +30,9 @@ st.markdown("""
         div[data-testid="stJson"] { 
             line-height: 1.0 !important; 
         }
-
-        /* 3. Compact Header Spacing */
         hr { margin-top: 0.5rem !important; margin-bottom: 0.8rem !important; }
 
-        /* Sidebar Styles - DO NOT CHANGE */
+        /* Sidebar Styles */
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
@@ -57,7 +52,6 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
 
-        /* Viewing Panel Compactness */
         [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -10px !important; }
 
         .endpoint-label { 
@@ -80,15 +74,12 @@ if 'initialized' not in st.session_state:
     st.session_state.viewed_ids = set()
     st.session_state.initialized = True
 
-# --- 4. TOP HEADER (Restored Copy Icon + Single Line) ---
-# We use a column layout with very specific widths to prevent overlap
+# --- 4. TOP HEADER ---
 col1, col2, col3 = st.columns([1.6, 4, 3])
 with col1:
     st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
 with col2:
-    # st.code restores the copy icon
     st.code(f"https://ntfy.sh/{TOPIC}", language="text")
-# col3 is empty to act as a spacer and keep the URL box from stretching
 
 st.divider()
 
@@ -103,6 +94,7 @@ try:
             m_id = msg.get('id')
             m_time = float(msg.get('time', 0))
 
+            # The Gate: Strict ID and Timestamp check
             if (msg.get('event') == 'message' and
                     m_time > st.session_state.session_gate and
                     m_id not in st.session_state.seen_ids):
@@ -128,12 +120,14 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
+    # REWROTE RESET LOGIC:
+    # This physically empties the session storage to force a clean slate.
     if st.button("🔄 Reset", use_container_width=True):
-        st.session_state.session_gate = time.time()
         st.session_state.feed_data = []
         st.session_state.seen_ids = set()
-        st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
+        st.session_state.selected_msg = None
+        st.session_state.session_gate = time.time()
         st.rerun()
 
     st.divider()
@@ -163,6 +157,7 @@ with st.sidebar:
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
+    # Ensure current selection still passes the gate
     if float(sel.get('time', 0)) > st.session_state.session_gate:
         try:
             full_content = json.loads(sel.get('message'))
