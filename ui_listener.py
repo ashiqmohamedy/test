@@ -23,10 +23,10 @@ st.markdown("""
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
-        /* Sidebar Buttons: Optimized for Full ID display */
+        /* Sidebar Buttons */
         .stButton > button { 
             height: 32px !important; 
-            margin-bottom: -16px !important; 
+            margin-bottom: -18px !important; 
             border-radius: 4px !important; 
             text-align: left !important; 
             font-family: 'Courier New', Courier, monospace !important; 
@@ -39,6 +39,12 @@ st.markdown("""
             overflow: hidden !important;
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
+
+        /* JSON Line Spacing Reduction */
+        div[data-testid="stJson"] { 
+            line-height: 1.1 !important; 
+        }
+
         .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 5px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -103,17 +109,12 @@ with st.sidebar:
         for msg in st.session_state.feed_data:
             if search_query and search_query not in msg.get('message', '').lower(): continue
             m_id = msg.get('id', 'N/A')
-
-            # Formatted Date and Time
             dt_obj = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ))
             date_str = dt_obj.strftime('%d-%b-%y')
             time_str = dt_obj.strftime('%H:%M:%S')
-
             is_new = m_id not in st.session_state.viewed_ids
 
-            # NEW FORMAT: Date, Time | Full ID
             label = f"{'🔵' if is_new else '  '} {date_str}, {time_str} | {m_id}"
-
             if st.button(label, key=f"msg_{m_id}", use_container_width=True):
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
@@ -124,10 +125,31 @@ if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     if float(sel.get('time', 0)) > st.session_state.session_gate:
         try:
-            content = json.loads(sel.get('message'))
-            st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
-            st.json(content.get('payload', content))
-        except:
+            full_content = json.loads(sel.get('message'))
+            payload = full_content.get('payload', full_content)
+            headers = full_content.get('headers', {"Info": "Direct payload received"})
+
+            # Header Area with Download Button
+            col_meta, col_dl = st.columns([4, 1])
+            with col_meta:
+                st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
+            with col_dl:
+                st.download_button(
+                    label="💾 Download JSON",
+                    data=json.dumps(payload, indent=4),
+                    file_name=f"webhook_{sel.get('id')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
+
+            st.markdown("**📦 JSON Body**")
+            st.json(payload)
+
+            st.divider()
+            with st.expander("🌐 View HTTP Headers", expanded=True):
+                st.json(headers)
+        except Exception as e:
+            st.error(f"Error parsing content: {e}")
             st.json(sel.get('message'))
     else:
         st.session_state.selected_msg = None
