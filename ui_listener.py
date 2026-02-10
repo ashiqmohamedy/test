@@ -17,15 +17,15 @@ USER_TZ = 'Asia/Kolkata'
 # --- 2. UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-# 3. Session State
+# 3. Session State Management
 if 'initialized' not in st.session_state:
     st.session_state.session_gate = time.time()
     st.session_state.feed_data, st.session_state.seen_ids = [], set()
     st.session_state.selected_msg, st.session_state.viewed_ids = None, set()
     st.session_state.initialized = True
 
-# Dynamic CSS for the Persistent Highlight
-active_id = st.session_state.selected_msg.get('id') if st.session_state.selected_msg else None
+# --- DYNAMIC CSS FOR PERSISTENT HIGHLIGHT & PULSE ---
+active_id = st.session_state.selected_msg.get('id') if st.session_state.selected_msg else "NONE"
 
 st.markdown(f"""
     <style>
@@ -38,7 +38,7 @@ st.markdown(f"""
         .brand-title {{ font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }}
         .brand-sep {{ border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }}
 
-        /* General Sidebar Button Style */
+        /* Sidebar Buttons */
         .stButton > button {{ 
             height: 32px !important; 
             margin-bottom: -18px !important; 
@@ -48,22 +48,28 @@ st.markdown(f"""
             font-size: 10.5px !important; 
             border: none !important; 
             background-color: transparent !important; 
-            padding-left: 8px !important;
+            padding-left: 10px !important;
             box-shadow: none !important;
-            white-space: nowrap !important;
-            overflow: hidden !important;
-            transition: all 0.2s ease;
+            transition: all 0.3s ease;
         }}
 
-        /* Persistent Active State for the specific ID */
+        /* PERSISTENT HIGHLIGHT: Targets the selected message ID */
         div[data-testid="stSidebar"] div[data-key="m_{active_id}"] button {{
             background-color: rgba(16, 185, 129, 0.2) !important;
             color: #10b981 !important;
             border-left: 4px solid #10b981 !important;
-            font-weight: bold !important;
+            font-weight: 800 !important;
         }}
 
         .stButton > button:hover {{ background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }}
+
+        /* Pro Polish: Pulse Animation for Status */
+        @keyframes pulse {{
+            0% {{ opacity: 1; }}
+            50% {{ opacity: 0.3; }}
+            100% {{ opacity: 1; }}
+        }}
+        .status-pulse {{ animation: pulse 2s infinite; font-size: 12px; margin-right: 5px; }}
 
         .endpoint-label {{ font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-top: 10px !important; white-space: nowrap; }}
         .id-pill {{ background-color: #1e1e1e; padding: 2px 8px; border-radius: 12px; border: 1px solid #333; font-family: monospace; color: #10b981; font-size: 12px; }}
@@ -72,12 +78,8 @@ st.markdown(f"""
 
 # --- 4. TOP HEADER ---
 col1, col2, col3 = st.columns([1.6, 4, 3])
+# We assume green unless the request block fails
 status_icon = "🟢"
-with col1:
-    st.markdown(f'<p class="endpoint-label">{status_icon} ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
-with col2:
-    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
-st.divider()
 
 # --- 5. DATA FETCHING ---
 try:
@@ -103,6 +105,13 @@ try:
 except:
     status_icon = "🔴"
 
+with col1:
+    st.markdown(f'<p class="endpoint-label"><span class="status-pulse">{status_icon}</span> ACTIVE ENDPOINT</p>',
+                unsafe_allow_html=True)
+with col2:
+    st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+st.divider()
+
 # --- 6. SIDEBAR ---
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
@@ -121,9 +130,9 @@ with st.sidebar:
         dt_obj = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ))
         ts_str = dt_obj.strftime('%d-%b-%y, %H:%M:%S')
 
+        # The blue dot stays until the ID is in viewed_ids
         label = f"{'🔵' if m_id not in st.session_state.viewed_ids else '  '} {ts_str} | {msg.get('extracted_ip')}"
 
-        # Unique key used by CSS for persistent highlighting
         if st.button(label, key=f"m_{m_id}", use_container_width=True):
             st.session_state.selected_msg = msg
             st.session_state.viewed_ids.add(m_id)
@@ -133,22 +142,26 @@ with st.sidebar:
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     if float(sel.get('time', 0)) > st.session_state.session_gate:
-        full = json.loads(sel.get('message'))
-        p, h = full.get('payload', full), full.get('headers', {"Info": "Direct payload"})
-        c_m, c_d = st.columns([4, 1])
-        with c_m:
-            st.markdown(f"Viewing Request: <span class='id-pill'>{sel.get('id')}</span>", unsafe_allow_html=True)
-        with c_d:
-            st.download_button("💾 Download JSON", json.dumps(p, indent=4), f"wh_{sel.get('id')}.json",
-                               "application/json", use_container_width=True)
-        st.markdown("**📦 JSON Body**")
-        st.json(p)
-        with st.expander("🌐 View HTTP Headers", expanded=False):
-            st.json(h)
+        try:
+            full = json.loads(sel.get('message'))
+            p, h = full.get('payload', full), full.get('headers', {"Info": "Direct payload received"})
+            c_m, c_d = st.columns([4, 1])
+            with c_m:
+                st.markdown(f"Viewing Request: <span class='id-pill'>{sel.get('id')}</span>", unsafe_allow_html=True)
+            with c_d:
+                st.download_button("💾 Download JSON", json.dumps(p, indent=4), f"wh_{sel.get('id')}.json",
+                                   "application/json", use_container_width=True)
+            st.markdown("**📦 JSON Body**")
+            st.json(p)
+            with st.expander("🌐 View HTTP Headers", expanded=False):
+                st.json(h)
+        except:
+            st.error("Error parsing content")
     else:
-        st.session_state.selected_msg = None; st.rerun()
+        st.session_state.selected_msg = None;
+        st.rerun()
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
 
-time.sleep(4);
+time.sleep(4)
 st.rerun()
