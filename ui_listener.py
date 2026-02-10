@@ -19,12 +19,25 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* Compact Layout Fixes */
-        .block-container { padding-top: 1rem !important; max-width: 98% !important; }
+        /* 1. Fix Top Header Visibility */
+        .block-container { 
+            padding-top: 2.5rem !important; 
+            max-width: 98% !important; 
+        }
 
-        /* Reduce gaps in Header/Active Endpoint Section */
+        /* 2. Remove Internal JSON Scrollbar */
+        div[data-testid="stJson"] > div {
+            overflow: visible !important;
+            max-height: none !important;
+        }
+        div[data-testid="stJson"] { 
+            line-height: 1.0 !important; 
+            overflow: visible !important;
+        }
+
+        /* 3. Compact Header Spacing */
         .stCode { margin-bottom: -10px !important; }
-        hr { margin-top: 1rem !important; margin-bottom: 1rem !important; }
+        hr { margin-top: 0.5rem !important; margin-bottom: 0.5rem !important; }
 
         /* Sidebar Styles */
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
@@ -46,12 +59,8 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
 
-        /* JSON Compactness */
-        div[data-testid="stJson"] { line-height: 1.0 !important; }
-
-        /* Vertical Spacing between elements in Viewing Area */
-        [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -5px !important; }
-
+        /* General Compactness */
+        [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -8px !important; }
         .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 2px !important; }
     </style>
 """, unsafe_allow_html=True)
@@ -65,7 +74,7 @@ if 'initialized' not in st.session_state:
     st.session_state.viewed_ids = set()
     st.session_state.initialized = True
 
-# --- 4. TOP HEADER (Tightened) ---
+# --- 4. TOP HEADER ---
 st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
@@ -138,7 +147,7 @@ with st.sidebar:
                 st.session_state.viewed_ids.add(m_id)
                 st.rerun()
 
-# --- 7. MAIN CONTENT (Viewing Section) ---
+# --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     if float(sel.get('time', 0)) > st.session_state.session_gate:
@@ -147,7 +156,6 @@ if st.session_state.selected_msg:
             payload = full_content.get('payload', full_content)
             headers = full_content.get('headers', {"Info": "Direct payload received"})
 
-            # Compact Header
             col_meta, col_dl = st.columns([4, 1])
             with col_meta:
                 st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
@@ -163,7 +171,6 @@ if st.session_state.selected_msg:
             st.markdown("**📦 JSON Body**")
             st.json(payload)
 
-            # Collapsed by default to save vertical space
             with st.expander("🌐 View HTTP Headers", expanded=False):
                 st.json(headers)
         except Exception as e:
