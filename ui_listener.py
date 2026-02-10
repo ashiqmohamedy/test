@@ -5,7 +5,6 @@ import time
 from datetime import datetime
 import pytz
 import urllib3
-import uuid
 
 # Silences the insecure request warning
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -46,10 +45,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Session State: The "Clean Slate" Logic
-if 'session_start_time' not in st.session_state:
-    # On first load, we record the exact moment the user arrived
-    st.session_state.session_start_time = time.time()
+# 3. Session State
+if 'session_gate' not in st.session_state:
+    st.session_state.session_gate = time.time()
 if 'selected_msg' not in st.session_state:
     st.session_state.selected_msg = None
 if 'viewed_ids' not in st.session_state:
@@ -60,22 +58,19 @@ st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_h
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
 
-# --- 5. DATA FETCHING (Strict Session Gate) ---
+# --- 5. DATA FETCHING ---
 current_feed = []
 try:
-    # verify=False for your SSL issues
+    # Use verify=False for SSL; timeout 5s
     r = requests.get(URL, timeout=5, verify=False)
     if r.status_code == 200:
         lines = r.text.strip().split('\n')
         for line in lines:
             if not line: continue
             msg = json.loads(line)
-
-            # The Gate: Is this message newer than our last Reset/Arrival?
-            m_time = float(msg.get('time', 0))
-            if msg.get('event') == 'message' and m_time > st.session_state.session_start_time:
+            # THE GATE: Filter out anything older than the last Reset
+            if msg.get('event') == 'message' and float(msg.get('time', 0)) > st.session_state.session_gate:
                 current_feed.append(msg)
-
         current_feed.sort(key=lambda x: x.get('time', 0), reverse=True)
 except:
     pass
@@ -85,9 +80,9 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    # RESET: Forces a brand new "Start Time" which makes all old server data invalid
+    # RESET: Immediately moves the 'gate' forward in time
     if st.button("🔄 Reset", use_container_width=True):
-        st.session_state.session_start_time = time.time()
+        st.session_state.session_gate = time.time()
         st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
         st.rerun()
@@ -96,29 +91,33 @@ with st.sidebar:
     search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
                                  label_visibility="collapsed").lower()
 
-    for msg in current_feed:
-        if search_query and search_query not in msg.get('message', '').lower(): continue
+    if not current_feed:
+        # Subtle status instead of overlapping text
+        st.markdown('<p style="font-size:11px; color:grey; padding-left:5px;">Listening for new payloads...</p>',
+                    unsafe_allow_html=True)
+    else:
+        for msg in current_feed:
+            if search_query and search_query not in msg.get('message', '').lower(): continue
+            m_id = msg.get('id', 'N/A')
+            ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime(
+                '%H:%M:%S')
+            is_new = m_id not in st.session_state.viewed_ids
 
-        m_id = msg.get('id', 'N/A')
-        ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime('%H:%M:%S')
-        is_new = m_id not in st.session_state.viewed_ids
-
-        label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
-
-        if st.button(label, key=f"f_{m_id}", use_container_width=True):
-            st.session_state.selected_msg = msg
-            st.session_state.viewed_ids.add(m_id)
-            # We don't rerun here to prevent the 'blink' - let the logic below handle it
-            st.rerun()
+            label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
+            if st.button(label, key=f"msg_{m_id}", use_container_width=True):
+                st.session_state.selected_msg = msg
+                st.session_state.viewed_ids.add(m_id)
+                st.rerun()
 
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
-    # Ensure selected message hasn't been "Reset" away
-    if float(sel.get('time', 0)) > st.session_state.session_start_time:
+    # Ensure the selection hasn't been reset
+    if float(sel.get('time', 0)) > st.session_state.session_gate:
         try:
             content = json.loads(sel.get('message'))
             st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
+            # Handle both nested 'payload' and flat objects
             st.json(content.get('payload', content))
         except:
             st.json(sel.get('message'))
@@ -128,7 +127,7 @@ if st.session_state.selected_msg:
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
 
-# --- 8. REFRESH LOOP ---
-# A 4-second delay is the "sweet spot" to keep it live without constant blinking
-time.sleep(4)
+# --- 8. STABLE REFRESH ---
+# 5-second interval provides a good balance between "Live" and "Stable UI"
+time.sleep(5)
 st.rerun()
