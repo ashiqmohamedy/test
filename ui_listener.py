@@ -19,13 +19,9 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        /* Padding to clear the Streamlit top-right menu */
         .block-container { padding-top: 5rem !important; max-width: 98% !important; }
-
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
-
-        /* Sidebar Buttons: Strictly Borderless */
         .stButton > button { 
             height: 32px !important; 
             margin-bottom: -18px !important; 
@@ -39,7 +35,6 @@ st.markdown("""
             box-shadow: none !important;
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
-
         .endpoint-label {
             font-family: 'Courier New', Courier, monospace;
             font-size: 14px;
@@ -63,17 +58,17 @@ st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_h
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
 
-# --- 5. DATA FETCHING (SSL FIX + TIME FILTER) ---
+# --- 5. DATA FETCHING (SSL FIX + IMPROVED FILTERING) ---
 feed = []
 try:
-    # verify=False is required for your network environment
     r = requests.get(URL, timeout=10, verify=False)
     if r.status_code == 200:
         lines = r.text.strip().split('\n')
         for line in lines:
             if not line: continue
             msg = json.loads(line)
-            if msg.get('event') == 'message' and msg.get('time', 0) > st.session_state.clear_before:
+            # Filter: must be a message AND arrive AFTER the clear_before timestamp
+            if msg.get('event') == 'message' and float(msg.get('time', 0)) > st.session_state.clear_before:
                 feed.append(msg)
         feed.sort(key=lambda x: x.get('time', 0), reverse=True)
 except Exception as e:
@@ -84,7 +79,8 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    if st.button("🔄 Reset Feed", use_container_width=True):
+    # Changed label to "Reset" and fixed clearing logic
+    if st.button("🔄 Reset", use_container_width=True):
         st.session_state.clear_before = time.time()
         st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
