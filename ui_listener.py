@@ -35,18 +35,13 @@ st.markdown("""
             box-shadow: none !important;
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
-        .endpoint-label {
-            font-family: 'Courier New', Courier, monospace;
-            font-size: 14px;
-            font-weight: 700;
-            color: #10b981;
-            margin-bottom: 5px !important;
-        }
+        .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 5px !important; }
     </style>
 """, unsafe_allow_html=True)
 
-# 3. Session State
+# 3. Session State (Initialized once)
 if 'session_gate' not in st.session_state:
+    # This ensures that on first load, the page is 100% empty
     st.session_state.session_gate = time.time()
 if 'selected_msg' not in st.session_state:
     st.session_state.selected_msg = None
@@ -61,15 +56,16 @@ st.divider()
 # --- 5. DATA FETCHING ---
 current_feed = []
 try:
-    # Use verify=False for SSL; timeout 5s
+    # verify=False for SSL; timeout 5s
     r = requests.get(URL, timeout=5, verify=False)
     if r.status_code == 200:
         lines = r.text.strip().split('\n')
         for line in lines:
             if not line: continue
             msg = json.loads(line)
-            # THE GATE: Filter out anything older than the last Reset
-            if msg.get('event') == 'message' and float(msg.get('time', 0)) > st.session_state.session_gate:
+            # THE GATE: Filter out anything from before the current session/reset
+            m_time = float(msg.get('time', 0))
+            if msg.get('event') == 'message' and m_time > st.session_state.session_gate:
                 current_feed.append(msg)
         current_feed.sort(key=lambda x: x.get('time', 0), reverse=True)
 except:
@@ -80,7 +76,7 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    # RESET: Immediately moves the 'gate' forward in time
+    # RESET: Immediately moves the 'gate' forward to NOW.
     if st.button("🔄 Reset", use_container_width=True):
         st.session_state.session_gate = time.time()
         st.session_state.selected_msg = None
@@ -92,9 +88,10 @@ with st.sidebar:
                                  label_visibility="collapsed").lower()
 
     if not current_feed:
-        # Subtle status instead of overlapping text
-        st.markdown('<p style="font-size:11px; color:grey; padding-left:5px;">Listening for new payloads...</p>',
-                    unsafe_allow_html=True)
+        # No overlapping caption, just a subtle message
+        st.markdown(
+            '<p style="font-size:11px; color:grey; padding-left:10px; margin-top:20px;">No new webhooks yet...</p>',
+            unsafe_allow_html=True)
     else:
         for msg in current_feed:
             if search_query and search_query not in msg.get('message', '').lower(): continue
@@ -107,17 +104,16 @@ with st.sidebar:
             if st.button(label, key=f"msg_{m_id}", use_container_width=True):
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
-                st.rerun()
+                st.rerun()  # Forces the RHS to update immediately
 
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
-    # Ensure the selection hasn't been reset
+    # Double check that the selection hasn't been "Reset" away
     if float(sel.get('time', 0)) > st.session_state.session_gate:
         try:
             content = json.loads(sel.get('message'))
             st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
-            # Handle both nested 'payload' and flat objects
             st.json(content.get('payload', content))
         except:
             st.json(sel.get('message'))
@@ -127,7 +123,7 @@ if st.session_state.selected_msg:
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
 
-# --- 8. STABLE REFRESH ---
-# 5-second interval provides a good balance between "Live" and "Stable UI"
-time.sleep(5)
+# --- 8. REFRESH LOOP ---
+# We use a slightly longer delay (6s) to ensure mouse clicks aren't interrupted
+time.sleep(6)
 st.rerun()
