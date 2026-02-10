@@ -17,18 +17,29 @@ USER_TZ = 'Asia/Kolkata'
 # --- 2. UI SETUP ---
 st.set_page_config(page_title="Webhook Tester", layout="wide")
 
-st.markdown("""
+# 3. Session State
+if 'initialized' not in st.session_state:
+    st.session_state.session_gate = time.time()
+    st.session_state.feed_data, st.session_state.seen_ids = [], set()
+    st.session_state.selected_msg, st.session_state.viewed_ids = None, set()
+    st.session_state.initialized = True
+
+# Dynamic CSS for the Persistent Highlight
+active_id = st.session_state.selected_msg.get('id') if st.session_state.selected_msg else None
+
+st.markdown(f"""
     <style>
-        .block-container { padding-top: 5.5rem !important; max-width: 98% !important; }
-        div[data-testid="stJson"] > div { overflow: visible !important; max-height: none !important; }
-        div[data-testid="stJson"] { line-height: 1.0 !important; }
-        hr { margin-top: 0.5rem !important; margin-bottom: 0.8rem !important; }
+        .block-container {{ padding-top: 5.5rem !important; max-width: 98% !important; }}
+        div[data-testid="stJson"] > div {{ overflow: visible !important; max-height: none !important; }}
+        div[data-testid="stJson"] {{ line-height: 1.0 !important; }}
+        hr {{ margin-top: 0.5rem !important; margin-bottom: 0.8rem !important; }}
 
-        /* Sidebar Styles */
-        .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
-        .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
+        /* Sidebar Branding */
+        .brand-title {{ font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }}
+        .brand-sep {{ border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }}
 
-        .stButton > button { 
+        /* General Sidebar Button Style */
+        .stButton > button {{ 
             height: 32px !important; 
             margin-bottom: -18px !important; 
             border-radius: 4px !important; 
@@ -37,35 +48,27 @@ st.markdown("""
             font-size: 10.5px !important; 
             border: none !important; 
             background-color: transparent !important; 
-            padding-left: 5px !important;
+            padding-left: 8px !important;
             box-shadow: none !important;
             white-space: nowrap !important;
             overflow: hidden !important;
-        }
+            transition: all 0.2s ease;
+        }}
 
-        /* Highlight for Selected Item */
-        .active-btn > div > button {
-            background-color: rgba(16, 185, 129, 0.15) !important;
+        /* Persistent Active State for the specific ID */
+        div[data-testid="stSidebar"] div[data-key="m_{active_id}"] button {{
+            background-color: rgba(16, 185, 129, 0.2) !important;
             color: #10b981 !important;
-            border-left: 3px solid #10b981 !important;
-        }
+            border-left: 4px solid #10b981 !important;
+            font-weight: bold !important;
+        }}
 
-        .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
-        [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -10px !important; }
+        .stButton > button:hover {{ background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }}
 
-        .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-top: 10px !important; white-space: nowrap; }
-
-        /* Metadata Pill */
-        .id-pill { background-color: #1e1e1e; padding: 2px 8px; border-radius: 12px; border: 1px solid #333; font-family: monospace; color: #10b981; font-size: 12px; }
+        .endpoint-label {{ font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-top: 10px !important; white-space: nowrap; }}
+        .id-pill {{ background-color: #1e1e1e; padding: 2px 8px; border-radius: 12px; border: 1px solid #333; font-family: monospace; color: #10b981; font-size: 12px; }}
     </style>
 """, unsafe_allow_html=True)
-
-# 3. Session State
-if 'initialized' not in st.session_state:
-    st.session_state.session_gate = time.time()
-    st.session_state.feed_data, st.session_state.seen_ids = [], set()
-    st.session_state.selected_msg, st.session_state.viewed_ids = None, set()
-    st.session_state.initialized = True
 
 # --- 4. TOP HEADER ---
 col1, col2, col3 = st.columns([1.6, 4, 3])
@@ -115,19 +118,16 @@ with st.sidebar:
     for msg in st.session_state.feed_data:
         if search and search not in msg.get('message', '').lower(): continue
         m_id = msg.get('id', 'N/A')
-        ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime(
-            '%d-%b-%y, %H:%M:%S')
-        is_active = st.session_state.selected_msg and st.session_state.selected_msg.get('id') == m_id
+        dt_obj = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ))
+        ts_str = dt_obj.strftime('%d-%b-%y, %H:%M:%S')
 
-        label = f"{'🔵' if m_id not in st.session_state.viewed_ids else '  '} {ts} | {msg.get('extracted_ip')}"
+        label = f"{'🔵' if m_id not in st.session_state.viewed_ids else '  '} {ts_str} | {msg.get('extracted_ip')}"
 
-        # Wrapping in a div to apply active styling
-        st.markdown(f'<div class="{"active-btn" if is_active else ""}">', unsafe_allow_html=True)
+        # Unique key used by CSS for persistent highlighting
         if st.button(label, key=f"m_{m_id}", use_container_width=True):
             st.session_state.selected_msg = msg
             st.session_state.viewed_ids.add(m_id)
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
