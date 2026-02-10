@@ -22,17 +22,21 @@ st.markdown("""
         .block-container { padding-top: 5rem !important; max-width: 98% !important; }
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
+
+        /* Sidebar Buttons: Optimized for Full ID display */
         .stButton > button { 
             height: 32px !important; 
-            margin-bottom: -18px !important; 
+            margin-bottom: -16px !important; 
             border-radius: 4px !important; 
             text-align: left !important; 
             font-family: 'Courier New', Courier, monospace !important; 
-            font-size: 11px !important; 
+            font-size: 10.5px !important; 
             border: none !important; 
             background-color: transparent !important; 
-            padding-left: 5px !important; 
+            padding-left: 2px !important; 
             box-shadow: none !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
         .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 5px !important; }
@@ -42,10 +46,10 @@ st.markdown("""
 # 3. Session State Management
 if 'initialized' not in st.session_state:
     st.session_state.session_gate = time.time()
-    st.session_state.feed_data = []  # Persistent feed for this session
-    st.session_state.seen_ids = set()  # To prevent duplicates/blinking
+    st.session_state.feed_data = []
+    st.session_state.seen_ids = set()
     st.session_state.selected_msg = None
-    st.session_state.viewed_ids = set()  # For the blue dot logic
+    st.session_state.viewed_ids = set()
     st.session_state.initialized = True
 
 # --- 4. TOP HEADER ---
@@ -53,7 +57,7 @@ st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_h
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
 
-# --- 5. DATA FETCHING (Incremental Only) ---
+# --- 5. DATA FETCHING ---
 try:
     r = requests.get(URL, timeout=5, verify=False)
     if r.status_code == 200:
@@ -64,14 +68,12 @@ try:
             m_id = msg.get('id')
             m_time = float(msg.get('time', 0))
 
-            # THE GATE: 1. Must be a message. 2. Must be newer than Reset. 3. Must not already be in our list.
             if (msg.get('event') == 'message' and
                     m_time > st.session_state.session_gate and
                     m_id not in st.session_state.seen_ids):
                 st.session_state.feed_data.append(msg)
                 st.session_state.seen_ids.add(m_id)
 
-        # Keep the feed sorted newest first
         st.session_state.feed_data.sort(key=lambda x: x.get('time', 0), reverse=True)
 except:
     pass
@@ -81,7 +83,6 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    # RESET: Wipes the local list and moves the time gate forward
     if st.button("🔄 Reset", use_container_width=True):
         st.session_state.session_gate = time.time()
         st.session_state.feed_data = []
@@ -102,11 +103,17 @@ with st.sidebar:
         for msg in st.session_state.feed_data:
             if search_query and search_query not in msg.get('message', '').lower(): continue
             m_id = msg.get('id', 'N/A')
-            ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime(
-                '%H:%M:%S')
+
+            # Formatted Date and Time
+            dt_obj = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ))
+            date_str = dt_obj.strftime('%d-%b-%y')
+            time_str = dt_obj.strftime('%H:%M:%S')
+
             is_new = m_id not in st.session_state.viewed_ids
 
-            label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
+            # NEW FORMAT: Date, Time | Full ID
+            label = f"{'🔵' if is_new else '  '} {date_str}, {time_str} | {m_id}"
+
             if st.button(label, key=f"msg_{m_id}", use_container_width=True):
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
@@ -115,7 +122,6 @@ with st.sidebar:
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
-    # Ensure it hasn't been reset away
     if float(sel.get('time', 0)) > st.session_state.session_gate:
         try:
             content = json.loads(sel.get('message'))
