@@ -19,11 +19,25 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        .block-container { padding-top: 5.5rem !important; max-width: 98% !important; }
-        div[data-testid="stJson"] > div { overflow: visible !important; max-height: none !important; }
-        div[data-testid="stJson"] { line-height: 1.0 !important; }
+        /* 1. Adjusted Padding to show header clearly */
+        .block-container { 
+            padding-top: 5.5rem !important; 
+            max-width: 98% !important; 
+        }
+
+        /* 2. Remove Internal JSON Scrollbar and compact lines */
+        div[data-testid="stJson"] > div {
+            overflow: visible !important;
+            max-height: none !important;
+        }
+        div[data-testid="stJson"] { 
+            line-height: 1.0 !important; 
+        }
+
+        /* 3. Compact Header Spacing */
         hr { margin-top: 0.5rem !important; margin-bottom: 0.8rem !important; }
 
+        /* Sidebar Styles */
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
@@ -42,6 +56,8 @@ st.markdown("""
             overflow: hidden !important;
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
+
+        /* Viewing Panel Compactness */
         [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -10px !important; }
 
         .endpoint-label { 
@@ -70,49 +86,39 @@ with col1:
     st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
 with col2:
     st.code(f"https://ntfy.sh/{TOPIC}", language="text")
+
 st.divider()
 
+# --- 5. DATA FETCHING (Stable Top-Down) ---
+try:
+    r = requests.get(URL, timeout=5, verify=False)
+    if r.status_code == 200:
+        raw_lines = r.text.strip().split('\n')
+        for line in raw_lines:
+            if not line: continue
+            msg = json.loads(line)
+            m_id = msg.get('id')
+            m_time = float(msg.get('time', 0))
 
-# --- 5. DATA FETCHING (Isolated Fragment) ---
-@st.fragment(run_every=4)
-def sync_data():
-    try:
-        r = requests.get(URL, timeout=3, verify=False)
-        if r.status_code == 200:
-            new_entries = False
-            raw_lines = r.text.strip().split('\n')
-            for line in raw_lines:
-                if not line: continue
-                msg = json.loads(line)
-                m_id = msg.get('id')
-                m_time = float(msg.get('time', 0))
+            if (msg.get('event') == 'message' and
+                    m_time > st.session_state.session_gate and
+                    m_id not in st.session_state.seen_ids):
 
-                if (msg.get('event') == 'message' and
-                        m_time > st.session_state.session_gate and
-                        m_id not in st.session_state.seen_ids):
+                source_ip = "Unknown IP"
+                try:
+                    inner_msg = json.loads(msg.get('message', '{}'))
+                    payload = inner_msg.get('payload', inner_msg)
+                    source_ip = payload.get('sannavServerIp', 'No IP')
+                except:
+                    pass
 
-                    source_ip = "Unknown IP"
-                    try:
-                        inner_msg = json.loads(msg.get('message', '{}'))
-                        payload = inner_msg.get('payload', inner_msg)
-                        source_ip = payload.get('sannavServerIp', 'No IP')
-                    except:
-                        pass
+                msg['extracted_ip'] = source_ip
+                st.session_state.feed_data.append(msg)
+                st.session_state.seen_ids.add(m_id)
 
-                    msg['extracted_ip'] = source_ip
-                    st.session_state.feed_data.append(msg)
-                    st.session_state.seen_ids.add(m_id)
-                    new_entries = True
-
-            if new_entries:
-                st.session_state.feed_data.sort(key=lambda x: x.get('time', 0), reverse=True)
-                st.rerun()  # Refresh UI only if new data arrived
-    except:
-        pass
-
-
-# Trigger the background sync
-sync_data()
+        st.session_state.feed_data.sort(key=lambda x: x.get('time', 0), reverse=True)
+except:
+    pass
 
 # --- 6. SIDEBAR ---
 with st.sidebar:
@@ -132,15 +138,20 @@ with st.sidebar:
                                  label_visibility="collapsed").lower()
 
     if not st.session_state.feed_data:
-        st.markdown('<p style="font-size:11px; color:grey; padding-left:10px; margin-top:20px;">Listening...</p>',
-                    unsafe_allow_html=True)
+        st.markdown(
+            '<p style="font-size:11px; color:grey; padding-left:10px; margin-top:20px;">Listening for new payloads...</p>',
+            unsafe_allow_html=True)
     else:
         for msg in st.session_state.feed_data:
             if search_query and search_query not in msg.get('message', '').lower(): continue
             m_id = msg.get('id', 'N/A')
             dt_obj = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ))
-            label = f"{'🔵' if m_id not in st.session_state.viewed_ids else '  '} {dt_obj.strftime('%d-%b-%y, %H:%M:%S')} | {msg.get('extracted_ip')}"
+            date_str = dt_obj.strftime('%d-%b-%y')
+            time_str = dt_obj.strftime('%H:%M:%S')
+            is_new = m_id not in st.session_state.viewed_ids
+            ip_label = msg.get('extracted_ip', 'No IP')
 
+            label = f"{'🔵' if is_new else '  '} {date_str}, {time_str} | {ip_label}"
             if st.button(label, key=f"msg_{m_id}", use_container_width=True):
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
@@ -159,18 +170,28 @@ if st.session_state.selected_msg:
             with col_meta:
                 st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
             with col_dl:
-                st.download_button(label="💾 Download JSON", data=json.dumps(payload, indent=4),
-                                   file_name=f"webhook_{sel.get('id')}.json", mime="application/json",
-                                   use_container_width=True)
+                st.download_button(
+                    label="💾 Download JSON",
+                    data=json.dumps(payload, indent=4),
+                    file_name=f"webhook_{sel.get('id')}.json",
+                    mime="application/json",
+                    use_container_width=True
+                )
 
             st.markdown("**📦 JSON Body**")
             st.json(payload)
+
             with st.expander("🌐 View HTTP Headers", expanded=False):
                 st.json(headers)
-        except:
-            st.error("Error parsing content")
+        except Exception as e:
+            st.error(f"Error parsing content")
+            st.json(sel.get('message'))
     else:
         st.session_state.selected_msg = None
         st.rerun()
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
+
+# --- 8. STABLE REFRESH ---
+time.sleep(4)
+st.rerun()
