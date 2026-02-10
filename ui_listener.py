@@ -19,7 +19,14 @@ st.set_page_config(page_title="Webhook Tester", layout="wide")
 
 st.markdown("""
     <style>
-        .block-container { padding-top: 5rem !important; max-width: 98% !important; }
+        /* Compact Layout Fixes */
+        .block-container { padding-top: 1rem !important; max-width: 98% !important; }
+
+        /* Reduce gaps in Header/Active Endpoint Section */
+        .stCode { margin-bottom: -10px !important; }
+        hr { margin-top: 1rem !important; margin-bottom: 1rem !important; }
+
+        /* Sidebar Styles */
         .brand-title { font-size: 1.6rem !important; font-weight: 800 !important; color: #10b981; font-family: 'Courier New', Courier, monospace !important; margin-bottom: 0px !important; letter-spacing: -1px; }
         .brand-sep { border: 0; height: 2px; background: linear-gradient(to right, #10b981, transparent); margin-bottom: 1rem !important; margin-top: 5px !important; }
 
@@ -39,8 +46,13 @@ st.markdown("""
         }
         .stButton > button:hover { background-color: rgba(16, 185, 129, 0.1) !important; color: #10b981 !important; }
 
-        div[data-testid="stJson"] { line-height: 1.1 !important; }
-        .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 5px !important; }
+        /* JSON Compactness */
+        div[data-testid="stJson"] { line-height: 1.0 !important; }
+
+        /* Vertical Spacing between elements in Viewing Area */
+        [data-testid="stVerticalBlock"] > div { padding-bottom: 0px !important; margin-bottom: -5px !important; }
+
+        .endpoint-label { font-family: 'Courier New', Courier, monospace; font-size: 14px; font-weight: 700; color: #10b981; margin-bottom: 2px !important; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -53,7 +65,7 @@ if 'initialized' not in st.session_state:
     st.session_state.viewed_ids = set()
     st.session_state.initialized = True
 
-# --- 4. TOP HEADER ---
+# --- 4. TOP HEADER (Tightened) ---
 st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
@@ -73,7 +85,6 @@ try:
                     m_time > st.session_state.session_gate and
                     m_id not in st.session_state.seen_ids):
 
-                # Pre-extract the IP for the sidebar label
                 source_ip = "Unknown IP"
                 try:
                     inner_msg = json.loads(msg.get('message', '{}'))
@@ -119,19 +130,15 @@ with st.sidebar:
             date_str = dt_obj.strftime('%d-%b-%y')
             time_str = dt_obj.strftime('%H:%M:%S')
             is_new = m_id not in st.session_state.viewed_ids
-
-            # Use the extracted IP for the label
             ip_label = msg.get('extracted_ip', 'No IP')
 
-            # NEW SIDEBAR FORMAT: Date, Time | IP
             label = f"{'🔵' if is_new else '  '} {date_str}, {time_str} | {ip_label}"
-
             if st.button(label, key=f"msg_{m_id}", use_container_width=True):
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
                 st.rerun()
 
-# --- 7. MAIN CONTENT ---
+# --- 7. MAIN CONTENT (Viewing Section) ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     if float(sel.get('time', 0)) > st.session_state.session_gate:
@@ -140,9 +147,9 @@ if st.session_state.selected_msg:
             payload = full_content.get('payload', full_content)
             headers = full_content.get('headers', {"Info": "Direct payload received"})
 
+            # Compact Header
             col_meta, col_dl = st.columns([4, 1])
             with col_meta:
-                # FULL ID remains visible here in the viewing panel
                 st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
             with col_dl:
                 st.download_button(
@@ -156,8 +163,8 @@ if st.session_state.selected_msg:
             st.markdown("**📦 JSON Body**")
             st.json(payload)
 
-            st.divider()
-            with st.expander("🌐 View HTTP Headers", expanded=True):
+            # Collapsed by default to save vertical space
+            with st.expander("🌐 View HTTP Headers", expanded=False):
                 st.json(headers)
         except Exception as e:
             st.error(f"Error parsing content: {e}")
