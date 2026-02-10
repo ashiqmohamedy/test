@@ -46,20 +46,20 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 3. State Management
+# We initialize clear_before only once.
+if 'clear_before' not in st.session_state:
+    st.session_state.clear_before = 0.0
 if 'selected_msg' not in st.session_state:
     st.session_state.selected_msg = None
 if 'viewed_ids' not in st.session_state:
     st.session_state.viewed_ids = set()
-if 'clear_before' not in st.session_state:
-    st.session_state.clear_before = 0
 
 # --- 4. TOP HEADER ---
 st.markdown('<p class="endpoint-label">📡 ACTIVE ENDPOINT</p>', unsafe_allow_html=True)
 st.code(f"https://ntfy.sh/{TOPIC}", language="text")
 st.divider()
 
-# --- 5. DATA FETCHING ---
-# We fetch data but strictly filter by the clear_before timestamp
+# --- 5. DATA FETCHING (Now strictly filtered by Session State) ---
 feed = []
 try:
     r = requests.get(URL, timeout=5, verify=False)
@@ -68,7 +68,7 @@ try:
         for line in lines:
             if not line: continue
             msg = json.loads(line)
-            # CRITICAL: Only add to feed if it happened AFTER the reset
+            # Only add if it's a message event and its timestamp is GREATER than our Reset time
             m_time = float(msg.get('time', 0))
             if msg.get('event') == 'message' and m_time > st.session_state.clear_before:
                 feed.append(msg)
@@ -81,8 +81,9 @@ with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    # RESET: Fixed to clear session memory and the RHS view
+    # --- RESET BUTTON: UPDATED LOGIC ---
     if st.button("🔄 Reset", use_container_width=True):
+        # Update the timestamp so Section 5 ignores all existing data on the next loop
         st.session_state.clear_before = time.time()
         st.session_state.selected_msg = None
         st.session_state.viewed_ids = set()
@@ -92,7 +93,7 @@ with st.sidebar:
     search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
                                  label_visibility="collapsed").lower()
 
-    # Render feed
+    # List the feed
     for msg in feed:
         if search_query and search_query not in msg.get('message', '').lower(): continue
         m_id = msg.get('id', 'N/A')
@@ -100,9 +101,7 @@ with st.sidebar:
         is_new = m_id not in st.session_state.viewed_ids
 
         btn_label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
-
-        # Use a callback-style approach to ensure the click is registered before the rerun
-        if st.button(btn_label, key=f"fixed_{m_id}", use_container_width=True):
+        if st.button(btn_label, key=f"final_btn_{m_id}", use_container_width=True):
             st.session_state.selected_msg = msg
             st.session_state.viewed_ids.add(m_id)
             st.rerun()
@@ -110,7 +109,7 @@ with st.sidebar:
 # --- 7. MAIN CONTENT ---
 if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
-    # Double check that the selected message isn't from before the latest Reset
+    # Final check: Don't show the message if it's older than the Reset time
     if float(sel.get('time', 0)) > st.session_state.clear_before:
         try:
             content = json.loads(sel.get('message'))
@@ -124,7 +123,7 @@ if st.session_state.selected_msg:
 else:
     st.info("👈 Select a webhook from the sidebar to begin.")
 
-# --- 8. STABLE REFRESH ---
-# Use a slightly longer sleep to prevent the "blinking" loop from breaking button clicks
-time.sleep(4)
+# --- 8. REFRESH LOOP ---
+# Increased to 5 seconds to reduce "blinking" and give the Reset state time to lock in
+time.sleep(5)
 st.rerun()
