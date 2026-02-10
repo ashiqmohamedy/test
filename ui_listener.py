@@ -6,7 +6,7 @@ from datetime import datetime
 import pytz
 import urllib3
 
-# This silences the insecure request warning in the logs
+# This silences the insecure request warning caused by verify=False
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # --- 1. CONFIGURATION ---
@@ -46,43 +46,51 @@ if 'selected_msg' not in st.session_state:
 if 'viewed_ids' not in st.session_state:
     st.session_state.viewed_ids = set()
 
-# --- 4. DATA FETCHING (SSL BYPASS INCLUDED) ---
+# --- 4. DATA FETCHING (The SSL Fix) ---
 feed = []
 try:
-    # verify=False handles the SSL revocation check issue
-    r = requests.get(URL, timeout=5, verify=False)
-    if r.status_code == 200:
-        raw_lines = r.text.strip().split('\n')
-        for line in raw_lines:
+    # verify=False is the Python equivalent of 'curl -k'
+    # It bypasses the SSL revocation check failure
+    response = requests.get(URL, timeout=10, verify=False)
+    if response.status_code == 200:
+        lines = response.text.strip().split('\n')
+        for line in lines:
             if not line: continue
             msg = json.loads(line)
             if msg.get('event') == 'message':
                 feed.append(msg)
-        # Sort newest first
+        # Sort by time, newest at the top
         feed.sort(key=lambda x: x.get('time', 0), reverse=True)
 except Exception as e:
-    st.sidebar.error(f"Connection Error: {e}")
+    st.sidebar.error(f"⚠️ Connection Error: {e}")
 
 # --- 5. SIDEBAR ---
 with st.sidebar:
     st.markdown('<p class="brand-title">WEBHOOK_TESTER</p>', unsafe_allow_html=True)
     st.markdown('<div class="brand-sep"></div>', unsafe_allow_html=True)
 
-    if st.button("🔄 Clear View", use_container_width=True):
+    if st.button("🔄 Reset View", use_container_width=True):
         st.session_state.selected_msg = None
+        st.session_state.viewed_ids = set()
         st.rerun()
 
     st.divider()
+    search_query = st.text_input(label="Search", placeholder="🔍 Filter...", key="search_bar",
+                                 label_visibility="collapsed").lower()
 
     if not feed:
-        st.caption("Awaiting data...")
+        st.caption("Awaiting data from ntfy.sh...")
     else:
         for msg in feed:
+            if search_query and search_query not in msg.get('message', '').lower(): continue
+
             m_id = msg.get('id', 'N/A')
             ts = datetime.fromtimestamp(msg.get('time'), pytz.utc).astimezone(pytz.timezone(USER_TZ)).strftime(
                 '%H:%M:%S')
+
             is_new = m_id not in st.session_state.viewed_ids
             label = f"{'🔵' if is_new else '  '} {ts} | ID: {m_id[:6]}"
+
             if st.button(label, key=m_id, use_container_width=True):
                 st.session_state.selected_msg = msg
                 st.session_state.viewed_ids.add(m_id)
@@ -92,15 +100,15 @@ if st.session_state.selected_msg:
     sel = st.session_state.selected_msg
     try:
         # Display the payload
-        content = json.loads(sel.get('message'))
+        msg_content = json.loads(sel.get('message'))
         st.markdown(f"**Viewing Request:** `{sel.get('id')}`")
-        st.json(content.get('payload', content))
+        st.json(msg_content.get('payload', msg_content))
     except:
-        # Fallback for simple text/json messages
+        # Fallback for non-JSON or flat JSON
         st.json(sel.get('message'))
 else:
-    st.info("👈 Select a webhook from the sidebar to begin.")
+    st.info("👈 Select a webhook from the sidebar to inspect details.")
 
-# --- 7. REFRESH LOOP ---
+# --- 7. AUTO-REFRESH ---
 time.sleep(2)
 st.rerun()
